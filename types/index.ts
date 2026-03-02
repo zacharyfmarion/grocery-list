@@ -13,12 +13,25 @@ export type GroceryCategory =
   | "produce"
   | "dairy"
   | "meat"
+  | "seafood"
+  | "deli"
   | "bakery"
   | "frozen"
   | "canned"
+  | "pasta"
+  | "condiments"
+  | "spices"
+  | "baking"
   | "beverages"
+  | "alcohol"
   | "snacks"
+  | "breakfast"
+  | "health"
+  | "baby"
+  | "pet"
   | "household"
+  | "cleaning"
+  | "paper"
   | "other";
 
 export interface GroceryItem {
@@ -45,22 +58,9 @@ export interface UserProfile {
 export interface UserPreferences {
   sortOrder: "manual" | "alphabetical" | "category";
   hapticsEnabled: boolean;
-}
-
-export interface ListTemplate {
-  id: string;
-  name: string;
-  ownerUid: string;
-  items: TemplateItem[];
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-}
-
-export interface TemplateItem {
-  name: string;
-  quantity: number;
-  unit?: string;
-  category?: GroceryCategory;
+  listOrder?: string[];
+  hiddenCategories?: GroceryCategory[];
+  categoryOrder?: GroceryCategory[];
 }
 
 export interface ItemHistoryEntry {

@@ -1,7 +1,7 @@
-import { MMKV } from "react-native-mmkv";
+import { createMMKV } from "react-native-mmkv";
 
 // ---------- storage ----------
-const storage = new MMKV({ id: "theme" });
+const storage = createMMKV({ id: "theme" });
 
 export type ColorMode = "light" | "dark" | "system";
 export type AccentName =

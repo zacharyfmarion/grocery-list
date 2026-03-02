@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Linking,
@@ -18,9 +18,11 @@ import { AppButton } from "@/components/ui/AppButton";
 import { useAuth } from "@/lib/auth-context";
 import { db } from "@/lib/firebase";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useCategories } from "@/hooks/useCategories";
 import { useTheme } from "@/lib/theme-context";
 import {
   ACCENT_OPTIONS,
+  ACCENT_PALETTES,
   type AccentName,
   type ColorMode,
 } from "@/lib/theme";
@@ -45,6 +47,32 @@ export default function SettingsScreen() {
   const { preferences, loading, updatePreferences } = usePreferences();
   const { colorMode, setColorMode, isDark, accent, accentName, setAccentName } =
     useTheme();
+  const {
+    allCategories,
+    toggleCategory,
+    isCategoryVisible,
+    reorderCategories,
+    loading: categoriesLoading,
+  } = useCategories();
+
+  const handleMoveCategory = useCallback(
+    (index: number, direction: "up" | "down") => {
+      if (direction === "up" && index === 0) return;
+      if (direction === "down" && index === allCategories.length - 1) return;
+
+      const newCategories = [...allCategories];
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+      [newCategories[index], newCategories[targetIndex]] = [
+        newCategories[targetIndex],
+        newCategories[index],
+      ];
+
+      reorderCategories(newCategories.map((c) => c.value));
+    },
+    [allCategories, reorderCategories],
+  );
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName || "");
 
@@ -91,7 +119,6 @@ export default function SettingsScreen() {
   };
 
   // Shared colors for inline styles
-  const sectionLabelColor = isDark ? "#9ca3af" : "#9ca3af";
   const chevronColor = isDark ? "#6b7280" : "#d1d5db";
   const iconSecondaryColor = isDark ? "#9ca3af" : "#6b7280";
   const headerIconColor = isDark ? "#f3f4f6" : "#111827";
@@ -273,9 +300,7 @@ export default function SettingsScreen() {
             </View>
             <View className="flex-row flex-wrap gap-3">
               {ACCENT_OPTIONS.map((option) => {
-                const palette =
-                  // eslint-disable-next-line @typescript-eslint/no-require-imports
-                  require("@/lib/theme").ACCENT_PALETTES[
+                const palette = ACCENT_PALETTES[
                     option.name as AccentName
                   ] as { 500: string; 600: string };
                 const isSelected = accentName === option.name;
@@ -402,6 +427,95 @@ export default function SettingsScreen() {
               }
             />
           </View>
+        </View>
+
+        {/* ── Categories ── */}
+        <Text className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-8 mb-2">
+          Categories
+        </Text>
+        <View className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+          {allCategories.map((category, index) => {
+            const isFirst = index === 0;
+            const isLast = index === allCategories.length - 1;
+            const isOther = category.value === "other";
+
+            return (
+              <View key={category.value}>
+                <View className="flex-row items-center px-4 py-3">
+                  <View
+                    className="w-9 h-9 rounded-full items-center justify-center mr-3"
+                    style={{ backgroundColor: accent[50] }}
+                  >
+                    <Ionicons
+                      name={category.icon as keyof typeof Ionicons.glyphMap}
+                      size={18}
+                      color={accent[600]}
+                    />
+                  </View>
+                  <Text className="flex-1 text-base text-gray-900 dark:text-gray-50">
+                    {category.label}
+                  </Text>
+
+                  {/* Reorder Arrows */}
+                  <View className="mr-3 items-center justify-center">
+                    <TouchableOpacity
+                      onPress={() => handleMoveCategory(index, "up")}
+                      disabled={isFirst || categoriesLoading}
+                      className="p-1"
+                      hitSlop={{ top: 5, bottom: 5, left: 10, right: 10 }}
+                    >
+                      <Ionicons
+                        name="chevron-up"
+                        size={16}
+                        color={
+                          isFirst || categoriesLoading
+                            ? "transparent"
+                            : chevronColor
+                        }
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleMoveCategory(index, "down")}
+                      disabled={isLast || categoriesLoading}
+                      className="p-1"
+                      hitSlop={{ top: 5, bottom: 5, left: 10, right: 10 }}
+                    >
+                      <Ionicons
+                        name="chevron-down"
+                        size={16}
+                        color={
+                          isLast || categoriesLoading
+                            ? "transparent"
+                            : chevronColor
+                        }
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Toggle Switch */}
+                  <Switch
+                    value={isCategoryVisible(category.value)}
+                    onValueChange={() => toggleCategory(category.value)}
+                    disabled={isOther || categoriesLoading}
+                    trackColor={{
+                      false: isDark ? "#374151" : "#e5e7eb",
+                      true: accent[600],
+                    }}
+                    thumbColor={
+                      isCategoryVisible(category.value)
+                        ? "#f8fafc"
+                        : isDark
+                          ? "#9ca3af"
+                          : "#f9fafb"
+                    }
+                  />
+                </View>
+                {!isLast && (
+                  <View className="h-px bg-gray-100 dark:bg-gray-800 ml-16" />
+                )}
+              </View>
+            );
+          })}
         </View>
 
         {/* ── About ── */}
