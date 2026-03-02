@@ -31,7 +31,7 @@ export function FormInput<T extends FieldValues>({
         field: { onChange, onBlur, value },
         fieldState: { error },
       }) => (
-        <View className="mb-4">
+        <View>
           <AppTextInput
             label={label}
             value={value}

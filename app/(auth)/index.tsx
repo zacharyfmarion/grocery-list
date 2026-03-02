@@ -47,12 +47,12 @@ export default function LoginScreen() {
         className="flex-1"
       >
         <View className="flex-1 justify-center px-8">
-          <View className="mb-12">
+          <View className="mb-8">
             <Text className="text-4xl font-bold text-gray-900 dark:text-gray-50 mb-2">
               Cartful
             </Text>
             <Text className="text-lg text-gray-500 dark:text-gray-400">
-              Sign in to your shared lists
+              Never forget the milk
             </Text>
           </View>
 
@@ -90,11 +90,11 @@ export default function LoginScreen() {
               disabled={isSubmitting}
               loading={isSubmitting}
               title="Sign In"
-              className="mt-2"
+              className=""
             />
           </View>
 
-          <View className="flex-row justify-center mt-8">
+          <View className="flex-row justify-center mt-6">
             <Text className="text-gray-500 dark:text-gray-400">Don't have an account? </Text>
             <Link href="/(auth)/register" asChild>
               <TouchableOpacity testID="login-goto-register">

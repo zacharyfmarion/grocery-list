@@ -52,12 +52,12 @@ export default function RegisterScreen() {
         className="flex-1"
       >
         <View className="flex-1 justify-center px-8">
-          <View className="mb-12">
+          <View className="mb-8">
             <Text className="text-4xl font-bold text-gray-900 dark:text-gray-50 mb-2">
               Create Account
             </Text>
             <Text className="text-lg text-gray-500 dark:text-gray-400">
-              Start sharing grocery lists
+              Let's get you set up
             </Text>
           </View>
 
@@ -67,7 +67,6 @@ export default function RegisterScreen() {
               name="displayName"
               testID="register-name"
               placeholder="Display name"
-              hint="This is how your partner will see you"
               autoComplete="name"
               textContentType="name"
             />
@@ -106,11 +105,11 @@ export default function RegisterScreen() {
               disabled={isSubmitting}
               loading={isSubmitting}
               title="Create Account"
-              className="mt-2"
+              className=""
             />
           </View>
 
-          <View className="flex-row justify-center mt-8">
+          <View className="flex-row justify-center mt-6">
             <Text className="text-gray-500 dark:text-gray-400">Already have an account? </Text>
             <TouchableOpacity testID="register-goto-login" onPress={() => router.back()}>
               <Text className="font-semibold" style={{ color: accent[600] }}>
