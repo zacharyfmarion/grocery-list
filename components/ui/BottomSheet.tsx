@@ -1,4 +1,4 @@
-import { View, Text, Modal, TouchableOpacity, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, Modal, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme-context";
 
@@ -58,7 +58,7 @@ export function BottomSheet({
                 {subtitle}
               </Text>
             )}
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} className="flex-shrink">
               {children}
             </ScrollView>
           </Pressable>

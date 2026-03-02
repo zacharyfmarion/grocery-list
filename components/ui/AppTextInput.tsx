@@ -22,10 +22,10 @@ export function AppTextInput({
         </Text>
       )}
       <TextInput
-        className={`border rounded-xl px-4 py-3.5 text-base text-gray-900 dark:text-gray-50 bg-gray-50 dark:bg-gray-950 ${
+        className={`border rounded-xl px-4 text-base text-gray-900 dark:text-gray-50 bg-gray-50 dark:bg-gray-950 ${
           error ? "border-red-500 dark:border-red-400" : "border-gray-200 dark:border-gray-700"
-        }`}
-        style={[{ lineHeight: 20 }, style]}
+        } ${props.multiline ? "py-3" : ""}`}
+        style={[{ lineHeight: 20, ...(!props.multiline ? { height: 48, textAlignVertical: "center" as const } : {}) }, style]}
         placeholderTextColor={isDark ? "#6b7280" : "#9ca3af"}
         {...props}
       />
