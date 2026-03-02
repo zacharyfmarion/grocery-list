@@ -1,20 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import DraggableFlatList, {
+  ScaleDecorator,
+  RenderItemParams,
+} from "react-native-draggable-flatlist";
+import { MenuView } from "@react-native-menu/menu";
 import { useLists } from "@/hooks/useLists";
-import { useTemplates } from "@/hooks/useTemplates";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme-context";
-import { GroceryItem, GroceryList, ListTemplate, TemplateItem } from "@/types";
+import { usePreferences } from "@/hooks/usePreferences";
+import { reconcileListOrder } from "@/lib/listOrderUtils";
+import { GroceryItem, GroceryList } from "@/types";
 import { IconButton } from "@/components/ui/IconButton";
 import * as Haptics from "expo-haptics";
 import { FAB } from "@/components/ui/FAB";
@@ -35,16 +41,17 @@ import { db } from "@/lib/firebase";
 import { suggestCategory } from "@/lib/constants";
 
 export default function ListsScreen() {
-  const { lists, loading, createList, deleteList } = useLists();
-  const { templates, loading: templatesLoading, saveAsTemplate } = useTemplates();
+  const { lists, loading, createList, deleteList, renameList, shareList } =
+    useLists();
   const { user } = useAuth();
-  const { accent, isDark } = useTheme();
+  const { accent } = useTheme();
+  const { preferences, updatePreferences } = usePreferences();
   const [showCreate, setShowCreate] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [creating, setCreating] = useState(false);
-  const [createTab, setCreateTab] = useState<"manual" | "template">("manual");
   const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
-  const [templateCreatingId, setTemplateCreatingId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const getInitials = (value?: string | null) => {
     if (!value) return "?";
@@ -55,6 +62,17 @@ export default function ListsScreen() {
   };
 
   const userLabel = user?.displayName || user?.email || "";
+
+  // Compute display order: reconcile saved order with current list IDs
+  const orderedLists = useMemo(() => {
+    const savedOrder = preferences.listOrder ?? [];
+    const currentIds = lists.map((l) => l.id);
+    const reconciledOrder = reconcileListOrder(savedOrder, currentIds);
+    const listMap = new Map(lists.map((l) => [l.id, l]));
+    return reconciledOrder
+      .map((id) => listMap.get(id)!)
+      .filter(Boolean);
+  }, [lists, preferences.listOrder]);
 
   useEffect(() => {
     setItemCounts((prev) => {
@@ -86,7 +104,7 @@ export default function ListsScreen() {
 
   const createListWithItems = async (
     name: string,
-    items: Array<GroceryItem | TemplateItem>
+    items: GroceryItem[]
   ) => {
     if (!user) throw new Error("Not authenticated");
 
@@ -108,7 +126,7 @@ export default function ListsScreen() {
         quantity: item.quantity ?? 1,
         ...(item.unit && { unit: item.unit }),
         category,
-        ...("note" in item && item.note ? { note: item.note } : {}),
+        ...(item.note ? { note: item.note } : {}),
         checked: false,
         addedBy: user.uid,
         createdAt: serverTimestamp(),
@@ -136,23 +154,6 @@ export default function ListsScreen() {
     }
   };
 
-  const handleCreateFromTemplate = async (template: ListTemplate) => {
-    if (!user) return;
-    if (!template.name) return;
-
-    setTemplateCreatingId(template.id);
-    try {
-      await createListWithItems(template.name, template.items);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setShowCreate(false);
-      setCreateTab("manual");
-    } catch {
-      Alert.alert("Error", "Failed to create list from template");
-    } finally {
-      setTemplateCreatingId(null);
-    }
-  };
-
   const handleDeleteList = (list: GroceryList) => {
     Alert.alert(
       "Delete List",
@@ -165,7 +166,9 @@ export default function ListsScreen() {
           onPress: async () => {
             try {
               await deleteList(list.id);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success
+              );
             } catch {
               Alert.alert("Error", "Failed to delete list");
             }
@@ -173,16 +176,6 @@ export default function ListsScreen() {
         },
       ]
     );
-  };
-
-  const handleSaveAsTemplate = async (list: GroceryList) => {
-    try {
-      const items = await fetchListItems(list.id);
-      await saveAsTemplate(list.name, items);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      Alert.alert("Error", "Failed to save template");
-    }
   };
 
   const handleDuplicateList = async (list: GroceryList) => {
@@ -195,47 +188,155 @@ export default function ListsScreen() {
     }
   };
 
-  const handleListActions = (list: GroceryList) => {
-    Alert.alert(list.name, "Choose an action", [
-      {
-        text: "Delete List",
-        style: "destructive",
-        onPress: () => handleDeleteList(list),
+  const handleShareList = (list: GroceryList) => {
+    Alert.prompt(
+      "Share List",
+      "Enter the email of the person to share with:",
+      async (email) => {
+        if (!email?.trim()) return;
+        try {
+          await shareList(list.id, email.trim());
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert("Shared!", `List shared with ${email.trim()}`);
+        } catch (e: unknown) {
+          const message =
+            e instanceof Error ? e.message : "Failed to share list";
+          Alert.alert("Error", message);
+        }
       },
-      { text: "Save as Template", onPress: () => handleSaveAsTemplate(list) },
-      { text: "Duplicate List", onPress: () => handleDuplicateList(list) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+      "plain-text"
+    );
   };
 
-  const renderListItem = ({ item }: { item: GroceryList }) => (
-    <TouchableOpacity
-      testID={`list-item-${item.id}`}
-      onPress={() => router.push(`/(app)/list/${item.id}`)}
-      onLongPress={() => handleListActions(item)}
-      activeOpacity={0.7}
-      className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 mb-3 shadow-sm"
-    >
-      <Text className="text-lg font-semibold text-gray-900 dark:text-gray-50" numberOfLines={1}>
-        {item.name}
-      </Text>
-      <View className="flex-row items-center mt-1">
-        <Ionicons name="list-outline" size={14} color={accent[600]} />
-        <Text
-          className="text-xs ml-1"
-          style={{ color: accent[700] }}
-        >
-          {itemCounts[item.id] ?? 0} items
-        </Text>
-      </View>
-      <Text className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-        {item.sharedWith.length > 0 ? "Shared" : "Private"} ·{" "}
-        {item.updatedAt
-          ? `Updated ${new Date(item.updatedAt.toDate()).toLocaleDateString()}`
-          : "Just created"}
-      </Text>
-    </TouchableOpacity>
-  );
+  const handleStartRename = (list: GroceryList) => {
+    setRenamingId(list.id);
+    setRenameValue(list.name);
+  };
+
+  const handleSubmitRename = async () => {
+    if (!renamingId || !renameValue.trim()) {
+      setRenamingId(null);
+      return;
+    }
+    try {
+      await renameList(renamingId, renameValue.trim());
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("Error", "Failed to rename list");
+    } finally {
+      setRenamingId(null);
+    }
+  };
+
+  const handleReorder = ({ data }: { data: GroceryList[] }) => {
+    const newOrder = data.map((l) => l.id);
+    updatePreferences({ listOrder: newOrder });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const renderListItem = ({
+    item,
+    drag,
+    isActive,
+  }: RenderItemParams<GroceryList>) => {
+    const isRenaming = renamingId === item.id;
+
+    return (
+      <ScaleDecorator>
+        <View className="relative">
+          <TouchableOpacity
+            testID={`list-item-${item.id}`}
+            onPress={() => {
+              if (!isRenaming) router.push(`/(app)/list/${item.id}`);
+            }}
+            onLongPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              drag();
+            }}
+            disabled={isActive}
+            activeOpacity={0.7}
+            className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 mb-3 shadow-sm"
+          >
+            <View className="flex-row items-start justify-between">
+              <View className="flex-1 mr-10">
+                {isRenaming ? (
+                  <AppTextInput
+                    value={renameValue}
+                    onChangeText={setRenameValue}
+                    autoFocus
+                    onSubmitEditing={handleSubmitRename}
+                    onBlur={handleSubmitRename}
+                    returnKeyType="done"
+                  />
+                ) : (
+                  <Text
+                    className="text-lg font-semibold text-gray-900 dark:text-gray-50"
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                )}
+                <View className="flex-row items-center mt-1">
+                  <Ionicons name="list-outline" size={14} color={accent[600]} />
+                  <Text className="text-xs ml-1" style={{ color: accent[700] }}>
+                    {itemCounts[item.id] ?? 0} items
+                  </Text>
+                </View>
+                <Text className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                  {item.sharedWith.length > 0 ? "Shared" : "Private"} ·{" "}
+                  {item.updatedAt
+                    ? `Updated ${new Date(item.updatedAt.toDate()).toLocaleDateString()}`
+                    : "Just created"}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          <View className="absolute top-4 right-4">
+            <MenuView
+              onPressAction={({ nativeEvent }) => {
+                if (nativeEvent.event === "rename") handleStartRename(item);
+                else if (nativeEvent.event === "duplicate") handleDuplicateList(item);
+                else if (nativeEvent.event === "share") handleShareList(item);
+                else if (nativeEvent.event === "delete") handleDeleteList(item);
+              }}
+              actions={[
+                {
+                  id: "rename",
+                  title: "Rename",
+                  image: "pencil",
+                },
+                {
+                  id: "duplicate",
+                  title: "Duplicate",
+                  image: "doc.on.doc",
+                },
+                {
+                  id: "share",
+                  title: "Share",
+                  image: "square.and.arrow.up",
+                },
+                {
+                  id: "delete",
+                  title: "Delete",
+                  attributes: { destructive: true },
+                  image: "trash",
+                },
+              ]}
+            >
+              <View className="p-2" hitSlop={8}>
+                <Ionicons
+                  name="ellipsis-vertical"
+                  size={20}
+                  color="#9ca3af"
+                />
+              </View>
+            </MenuView>
+          </View>
+        </View>
+      </ScaleDecorator>
+    );
+  };
 
   if (loading) {
     return (
@@ -259,18 +360,25 @@ export default function ListsScreen() {
               {getInitials(userLabel)}
             </Text>
           </TouchableOpacity>
-          <Text className="text-lg font-semibold text-gray-900 dark:text-gray-50">My Lists</Text>
+          <Text className="text-lg font-semibold text-gray-900 dark:text-gray-50">
+            My Lists
+          </Text>
           <IconButton
             icon="settings-outline"
             onPress={() => router.push("/settings")}
           />
         </View>
       </View>
-      <FlatList
-        className="flex-1 bg-gray-50 dark:bg-gray-950"
-        data={lists}
+      <DraggableFlatList
+        containerStyle={{ flex: 1 }}
+        className="bg-gray-50 dark:bg-gray-950"
+        data={orderedLists}
         keyExtractor={(item) => item.id}
         renderItem={renderListItem}
+        onDragBegin={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }}
+        onDragEnd={handleReorder}
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         ListEmptyComponent={
           <EmptyState
@@ -282,10 +390,7 @@ export default function ListsScreen() {
       />
 
       {/* FAB */}
-      <FAB
-        testID="create-list-fab"
-        onPress={() => setShowCreate(true)}
-      />
+      <FAB testID="create-list-fab" onPress={() => setShowCreate(true)} />
 
       {/* Create List Modal */}
       <BottomSheet
@@ -293,113 +398,25 @@ export default function ListsScreen() {
         onClose={() => setShowCreate(false)}
         title="New List"
       >
-        <View className="flex-row bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-4">
-          <TouchableOpacity
-            onPress={() => setCreateTab("manual")}
-            className={`flex-1 py-2 rounded-lg items-center justify-center ${
-              createTab === "manual"
-                ? "bg-white dark:bg-gray-600 shadow-sm"
-                : ""
-            }`}
-            activeOpacity={0.8}
-          >
-            <Text
-              className={`text-sm font-semibold ${
-                createTab === "manual"
-                  ? "text-gray-900 dark:text-gray-50"
-                  : "text-gray-500 dark:text-gray-400"
-              }`}
-            >
-              Manual
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setCreateTab("template")}
-            className={`flex-1 py-2 rounded-lg items-center justify-center ${
-              createTab === "template"
-                ? "bg-white dark:bg-gray-600 shadow-sm"
-                : ""
-            }`}
-            activeOpacity={0.8}
-          >
-            <Text
-              className={`text-sm font-semibold ${
-                createTab === "template"
-                  ? "text-gray-900 dark:text-gray-50"
-                  : "text-gray-500 dark:text-gray-400"
-              }`}
-            >
-              From Template
-            </Text>
-          </TouchableOpacity>
+        <View>
+          <AppTextInput
+            testID="new-list-name-input"
+            placeholder="List name (e.g. Safeway, Costco)"
+            value={newListName}
+            onChangeText={setNewListName}
+            autoFocus
+            onSubmitEditing={handleCreateList}
+            returnKeyType="done"
+            className="mb-4"
+          />
+          <AppButton
+            testID="create-list-submit"
+            onPress={handleCreateList}
+            disabled={creating || !newListName.trim()}
+            loading={creating}
+            title="Create List"
+          />
         </View>
-
-        {createTab === "manual" ? (
-          <View>
-            <AppTextInput
-              testID="new-list-name-input"
-              placeholder="List name (e.g. Safeway, Costco)"
-              value={newListName}
-              onChangeText={setNewListName}
-              autoFocus
-              onSubmitEditing={handleCreateList}
-              returnKeyType="done"
-              className="mb-4"
-            />
-            <AppButton
-              testID="create-list-submit"
-              onPress={handleCreateList}
-              disabled={creating || !newListName.trim()}
-              loading={creating}
-              title="Create List"
-            />
-          </View>
-        ) : (
-          <View>
-            {templatesLoading ? (
-              <View className="py-8 items-center justify-center">
-                <ActivityIndicator size="small" color={accent[500]} />
-              </View>
-            ) : templates.length === 0 ? (
-              <View className="py-6 items-center justify-center">
-                <Text className="text-sm text-gray-500 dark:text-gray-400">
-                  No templates yet. Save one from a list.
-                </Text>
-              </View>
-            ) : (
-              <View>
-                {templates.map((template) => (
-                  <TouchableOpacity
-                    key={template.id}
-                    className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 mb-3"
-                    activeOpacity={0.7}
-                    onPress={() => handleCreateFromTemplate(template)}
-                  >
-                    <View className="flex-row items-center justify-between">
-                      <View>
-                        <Text className="text-base font-semibold text-gray-900 dark:text-gray-50">
-                          {template.name}
-                        </Text>
-                        <Text className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                          {template.items.length} items
-                        </Text>
-                      </View>
-                      {templateCreatingId === template.id ? (
-                        <ActivityIndicator size="small" color={accent[500]} />
-                      ) : (
-                        <Ionicons
-                          name="sparkles-outline"
-                          size={20}
-                          color={accent[600]}
-                        />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
       </BottomSheet>
     </SafeAreaView>
   );
