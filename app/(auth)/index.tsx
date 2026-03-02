@@ -49,7 +49,7 @@ export default function LoginScreen() {
         <View className="flex-1 justify-center px-8">
           <View className="mb-12">
             <Text className="text-4xl font-bold text-gray-900 dark:text-gray-50 mb-2">
-              Grocery List
+              Cartful
             </Text>
             <Text className="text-lg text-gray-500 dark:text-gray-400">
               Sign in to your shared lists

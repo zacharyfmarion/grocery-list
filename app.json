@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Grocery List",
-    "slug": "grocery-list",
+    "name": "Cartful",
+    "slug": "cartful",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "grocerylist",
+    "scheme": "cartful",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -14,15 +14,21 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.grocerylist.app"
+      "bundleIdentifier": "com.cartful.app",
+      "splash": {
+        "image": "./assets/images/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#329f3d"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.grocerylist.app",
+      "package": "com.cartful.app",
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#329f3d",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       }
     },
     "plugins": [
@@ -30,6 +36,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0f6cff1d-4f5d-4d15-ac77-3415978fb101"
+      }
+    },
+    "owner": "zacharyfmarion"
   }
 }
