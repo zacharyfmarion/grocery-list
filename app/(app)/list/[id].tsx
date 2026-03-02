@@ -9,6 +9,7 @@ import {
   Platform,
   SectionList,
   TextInput,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -29,12 +30,12 @@ import { useAuth } from "@/lib/auth-context";
 import { useItems } from "@/hooks/useItems";
 import { useLists } from "@/hooks/useLists";
 import { useItemHistory } from "@/hooks/useItemHistory";
+import { useCategories } from "@/hooks/useCategories";
 import { GroceryCategory, GroceryItem, UserProfile } from "@/types";
 import {
   parseItemInput,
   formatQuantityUnit,
   UNITS,
-  CATEGORIES,
   suggestCategory,
 } from "@/lib/constants";
 import { AppTextInput } from "@/components/ui/AppTextInput";
@@ -42,6 +43,7 @@ import { AppButton } from "@/components/ui/AppButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { IconButton } from "@/components/ui/IconButton";
+import { useTheme } from "@/lib/theme-context";
 
 const ITEM_HEIGHT = 72;
 
@@ -61,7 +63,6 @@ type ListItemRowProps = {
   onToggle: (item: GroceryItem) => void;
   onDelete: (item: GroceryItem) => void;
   onEdit: (item: GroceryItem) => void;
-  onQuickAdd: (item: GroceryItem) => void;
   onReorder: (sectionTitle: string, itemId: string, offset: number) => void;
 };
 
@@ -104,10 +105,10 @@ const ListItemRow = ({
   onToggle,
   onDelete,
   onEdit,
-  onQuickAdd,
-  onReorder,
+onReorder,
 }: ListItemRowProps) => {
-  const addedBy =
+  const { accent, isDark } = useTheme();
+const addedBy =
     item.addedBy === userId
       ? "You"
       : memberProfiles[item.addedBy]?.displayName ||
@@ -118,24 +119,27 @@ const ListItemRow = ({
     <Animated.View
       entering={FadeIn.duration(200)}
       layout={Layout.springify().damping(15)}
-      className={`bg-white rounded-2xl border border-gray-100 px-4 py-3 mb-2 shadow-sm min-h-[72px] ${
+      className={`bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 px-4 py-3 mb-2 shadow-sm min-h-[72px] ${
         item.checked ? "opacity-60" : ""
       }`}
     >
-      <View className="flex-row items-center">
+      <View className="flex-row items-start pt-1">
         {reorderMode && !section.isCompleted ? (
           <View className="mr-3">
-            <Ionicons name="reorder-two" size={22} color="#9ca3af" />
+            <Ionicons name="reorder-two" size={22} color={isDark ? "#6b7280" : "#9ca3af"} />
           </View>
         ) : (
           <TouchableOpacity
             testID={`item-checkbox-${item.id}`}
             onPress={() => onToggle(item)}
-            className={`w-6 h-6 rounded-full border-2 items-center justify-center mr-3 ${
-              item.checked
-                ? "bg-primary-600 border-primary-600"
-                : "border-gray-300"
+            className={`w-6 h-6 rounded-full border-2 items-center justify-center mr-3 mt-1 ${
+              item.checked ? "" : "border-gray-300 dark:border-gray-600"
             }`}
+            style={
+              item.checked
+                ? { backgroundColor: accent[600], borderColor: accent[600] }
+                : undefined
+            }
           >
             {item.checked && (
               <Ionicons name="checkmark" size={16} color="white" />
@@ -144,23 +148,23 @@ const ListItemRow = ({
         )}
 
         <TouchableOpacity
-          onPress={() => onEdit(item)}
+          onPress={() => onToggle(item)}
           className="flex-1"
           activeOpacity={0.7}
         >
           <Text
             className={`text-base font-semibold ${
-              item.checked ? "text-gray-400 line-through" : "text-gray-900"
+              item.checked ? "text-gray-400 dark:text-gray-500 line-through" : "text-gray-900 dark:text-gray-50"
             }`}
             numberOfLines={1}
           >
             {item.name}
           </Text>
-          <Text className="text-xs text-gray-500 mt-1" numberOfLines={1}>
+          <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1" numberOfLines={1}>
             {formatQuantityDisplay(item)} · Added by {addedBy}
           </Text>
           {item.note ? (
-            <Text className="text-xs text-gray-400 mt-1" numberOfLines={1}>
+            <Text className="text-xs text-gray-400 dark:text-gray-500 mt-1" numberOfLines={1}>
               {item.note}
             </Text>
           ) : null}
@@ -168,10 +172,10 @@ const ListItemRow = ({
 
         {!reorderMode && (
           <TouchableOpacity
-            onPress={() => onQuickAdd(item)}
-            className="ml-3 w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+            onPress={() => onEdit(item)}
+            className="ml-3 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
           >
-            <Ionicons name="add" size={16} color="#4b5563" />
+            <Ionicons name="pencil" size={14} color={isDark ? "#9ca3af" : "#4b5563"} />
           </TouchableOpacity>
         )}
       </View>
@@ -213,7 +217,8 @@ const ListItemRow = ({
         <View className="flex-1 justify-center">
           <TouchableOpacity
             onPress={() => onToggle(item)}
-            className="bg-emerald-500 rounded-2xl mx-1 px-5 py-4"
+            className="rounded-2xl mx-1 px-5 py-4"
+            style={{ backgroundColor: accent[500] }}
           >
             <Text className="text-white font-semibold">
               {item.checked ? "Restore" : "Done"}
@@ -247,21 +252,23 @@ const ListItemRow = ({
 
 export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+const { user } = useAuth();
+  const { accent, isDark } = useTheme();
   const {
-    items,
-    loading,
-    addItem,
-    toggleItem,
-    updateQuantity,
-    updateItem,
-    deleteItem,
-    reorderItems,
-    uncheckedCount,
-    totalCount,
-  } = useItems(id);
+items,
+loading,
+addItem,
+toggleItem,
+updateQuantity,
+updateItem,
+deleteItem,
+reorderItems,
+uncheckedCount,
+totalCount,
+} = useItems(id);
   const { lists, shareList, renameList } = useLists();
   const { getSuggestions, recordItemUsage } = useItemHistory();
+  const { visibleCategories, allCategories } = useCategories();
   const list = lists.find((l) => l.id === id);
 
   const [newItemName, setNewItemName] = useState("");
@@ -288,7 +295,10 @@ export default function ListDetailScreen() {
     undefined
   );
   const [editNote, setEditNote] = useState("");
+  const [showNoteField, setShowNoteField] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [isNewItem, setIsNewItem] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   useEffect(() => {
     setNameDraft(list?.name ?? "");
@@ -331,12 +341,14 @@ export default function ListDetailScreen() {
   }, [memberUids]);
 
   useEffect(() => {
-    if (editingItem) {
+    if (editingItem && !isNewItem) {
       setEditName(editingItem.name);
       setEditQuantity(String(editingItem.quantity ?? 1));
       setEditUnit(editingItem.unit);
       setEditCategory(editingItem.category ?? suggestCategory(editingItem.name));
       setEditNote(editingItem.note ?? "");
+      setShowNoteField(!!editingItem.note);
+      setCategoryOpen(false);
     }
   }, [editingItem]);
 
@@ -362,7 +374,10 @@ export default function ListDetailScreen() {
 
   const sectionData = useMemo<ListSection[]>(() => {
     const sections: ListSection[] = [];
-    CATEGORIES.forEach((category) => {
+    const visibleValues = new Set(visibleCategories.map((c) => c.value));
+
+    // 1. Create sections for visible categories
+    visibleCategories.forEach((category) => {
       const data = uncheckedItems.filter(
         (item) => (item.category ?? "other") === category.value
       );
@@ -375,6 +390,31 @@ export default function ListDetailScreen() {
       }
     });
 
+    // 2. Collect items from hidden categories (or unknown categories)
+    const hiddenItems = uncheckedItems.filter(
+      (item) => !visibleValues.has(item.category ?? "other")
+    );
+
+    // 3. Add hidden items to "Other" section (create or merge)
+    if (hiddenItems.length) {
+      const otherIndex = sections.findIndex((s) => s.category === "other");
+      if (otherIndex >= 0) {
+        // Merge with existing "Other" section
+        const existing = sections[otherIndex];
+        sections[otherIndex] = {
+          ...existing,
+          data: sortItems([...existing.data, ...hiddenItems]),
+        };
+      } else {
+        // Create new "Other" section
+        sections.push({
+          title: "Other",
+          category: "other",
+          data: sortItems(hiddenItems),
+        });
+      }
+    }
+
     if (showCompleted && checkedItems.length) {
       sections.push({
         title: "Completed",
@@ -384,7 +424,7 @@ export default function ListDetailScreen() {
     }
 
     return sections;
-  }, [checkedItems, showCompleted, sortItems, uncheckedItems]);
+  }, [checkedItems, showCompleted, sortItems, uncheckedItems, visibleCategories]);
 
   useEffect(() => {
     if (reorderMode) {
@@ -394,11 +434,6 @@ export default function ListDetailScreen() {
 
   const displaySections = reorderMode ? orderedSections : sectionData;
 
-  const suggestions = useMemo(
-    () => getSuggestions(newItemName),
-    [getSuggestions, newItemName]
-  );
-  const showSuggestions = inputFocused && suggestions.length > 0;
 
 
   const handleAddItem = async () => {
@@ -408,17 +443,35 @@ export default function ListDetailScreen() {
 
     setAdding(true);
     try {
-      const quantity = parsed.quantity || 1;
       const category = suggestCategory(name);
-      await addItem({ name, quantity, unit: parsed.unit, category });
-      await recordItemUsage({ name, quantity, unit: parsed.unit, category });
+      await addItem({ name, quantity: parsed.quantity || 1, unit: parsed.unit ?? null, category });
+      await recordItemUsage({ name, quantity: parsed.quantity || 1, unit: parsed.unit ?? null, category });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setNewItemName("");
-    } catch {
-      Alert.alert("Error", "Failed to add item");
+    } catch (error) {
+      console.error("Failed to add item:", error);
     } finally {
       setAdding(false);
     }
+  };
+
+  const handleAddItemDetailed = () => {
+    const parsed = parseItemInput(newItemName);
+    const name = parsed.name.trim();
+
+    setEditName(name);
+    setEditQuantity(String(parsed.quantity || 1));
+    setEditUnit(parsed.unit);
+    setEditCategory(name ? suggestCategory(name) : undefined);
+    setEditNote("");
+    setShowNoteField(false);
+    setIsNewItem(true);
+    setCategoryOpen(false);
+    setEditingItem({} as GroceryItem);
+    setNewItemName("");
+    setIsNewItem(true);
+    setEditingItem({} as GroceryItem);
+    setNewItemName("");
   };
 
   const handleToggle = async (item: GroceryItem) => {
@@ -525,7 +578,7 @@ export default function ListDetailScreen() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingItem) return;
+    if (!editingItem && !isNewItem) return;
     const trimmed = editName.trim();
     if (!trimmed) {
       Alert.alert("Missing name", "Item name cannot be empty.");
@@ -538,17 +591,24 @@ export default function ListDetailScreen() {
     }
     setSavingEdit(true);
     try {
-      await updateItem(editingItem.id, {
-        name: trimmed,
-        quantity,
-        unit: editUnit ?? null,
-        category: editCategory ?? suggestCategory(trimmed),
-        note: editNote.trim() ? editNote.trim() : null,
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (isNewItem) {
+        await addItem({ name: trimmed, quantity, unit: editUnit ?? null, category: editCategory ?? suggestCategory(trimmed) });
+        await recordItemUsage({ name: trimmed, quantity, unit: editUnit ?? null, category: editCategory ?? suggestCategory(trimmed) });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        await updateItem(editingItem!.id, {
+          name: trimmed,
+          quantity,
+          unit: editUnit ?? null,
+          category: editCategory ?? suggestCategory(trimmed),
+          note: editNote.trim() ? editNote.trim() : null,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       setEditingItem(null);
+      setIsNewItem(false);
     } catch {
-      Alert.alert("Error", "Failed to update item");
+      Alert.alert("Error", "Failed to save item");
     } finally {
       setSavingEdit(false);
     }
@@ -596,42 +656,41 @@ export default function ListDetailScreen() {
       onToggle={handleToggle}
       onDelete={handleDelete}
       onEdit={setEditingItem}
-      onQuickAdd={(target) => handleQuantityChange(target, 1)}
       onReorder={handleReorder}
     />
   );
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#22c55e" />
+      <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <ActivityIndicator size="large" color={accent[500]} />
       </View>
     );
   }
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} className="flex-1 bg-white">
-      <View className="bg-white px-2 py-2 border-b border-gray-100 z-10">
+    <SafeAreaView edges={["top", "bottom"]} className="flex-1 bg-white dark:bg-gray-900">
+      <View className="bg-white dark:bg-gray-900 px-2 py-2 border-b border-gray-100 dark:border-gray-800 z-10">
         <View className="flex-row items-center justify-between min-h-[44px]">
           {/* Left: Back */}
           <View className="flex-none w-[20%] items-start">
             <TouchableOpacity
               onPress={() => router.back()}
-              className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-100 -ml-1"
+              className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-100 dark:active:bg-gray-800 -ml-1"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="chevron-back" size={26} color="#1f2937" />
+              <Ionicons name="chevron-back" size={26} color={isDark ? "#f3f4f6" : "#1f2937"} />
             </TouchableOpacity>
           </View>
 
           {/* Center: Title & Members */}
           <View className="flex-1 items-center justify-center mx-2 max-w-[60%]">
             {isRenaming ? (
-              <View className="flex-row items-center bg-gray-100 rounded-lg overflow-hidden w-full">
+              <View className="flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden w-full">
                 <TextInput
                   value={nameDraft}
                   onChangeText={setNameDraft}
-                  className="flex-1 py-1.5 px-3 text-sm font-semibold text-gray-900 text-center"
+                  className="flex-1 py-1.5 px-3 text-sm font-semibold text-gray-900 dark:text-gray-50 text-center"
                   autoFocus
                   returnKeyType="done"
                   onSubmitEditing={handleRename}
@@ -639,18 +698,18 @@ export default function ListDetailScreen() {
                   clearButtonMode="while-editing"
                   selectTextOnFocus
                 />
-                <View className="flex-row border-l border-gray-200">
-                  <TouchableOpacity onPress={handleRename} className="p-2 active:bg-emerald-50">
-                    <Ionicons name="checkmark" size={16} color="#16a34a" />
+                <View className="flex-row border-l border-gray-200 dark:border-gray-700">
+                  <TouchableOpacity onPress={handleRename} className="p-2 active:bg-gray-200 dark:active:bg-gray-700">
+                    <Ionicons name="checkmark" size={16} color={accent[600]} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
                       setIsRenaming(false);
                       setNameDraft(list?.name ?? "");
                     }}
-                    className="p-2 active:bg-gray-200"
+                    className="p-2 active:bg-gray-200 dark:active:bg-gray-700"
                   >
-                    <Ionicons name="close" size={16} color="#6b7280" />
+                    <Ionicons name="close" size={16} color={isDark ? "#9ca3af" : "#6b7280"} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -660,7 +719,7 @@ export default function ListDetailScreen() {
                 className="items-center justify-center w-full py-1"
                 activeOpacity={0.6}
               >
-                <Text className="text-lg font-bold text-gray-900 text-center leading-tight" numberOfLines={1}>
+                <Text className="text-lg font-bold text-gray-900 dark:text-gray-50 text-center leading-tight" numberOfLines={1}>
                   {list?.name || "List"}
                 </Text>
 
@@ -672,14 +731,16 @@ export default function ListDetailScreen() {
                         return (
                           <View
                             key={uid}
-                            className={`w-4 h-4 rounded-full items-center justify-center border border-white -ml-1 ${
-                              uid === list?.ownerUid ? "bg-emerald-100" : "bg-gray-100"
+                            className={`w-4 h-4 rounded-full items-center justify-center border border-white dark:border-gray-900 -ml-1 ${
+                              uid === list?.ownerUid ? "" : "bg-gray-100 dark:bg-gray-800"
                             } ${index === 0 ? "ml-0" : ""}`}
+                            style={uid === list?.ownerUid ? { backgroundColor: accent[100] } : undefined}
                           >
                             <Text
                               className={`text-[9px] font-bold ${
-                                uid === list?.ownerUid ? "text-emerald-700" : "text-gray-600"
+                                uid === list?.ownerUid ? "" : "text-gray-600 dark:text-gray-300"
                               }`}
+                              style={uid === list?.ownerUid ? { color: accent[700] } : undefined}
                             >
                               {getInitials(profile?.displayName, profile?.email).charAt(0)}
                             </Text>
@@ -687,14 +748,14 @@ export default function ListDetailScreen() {
                         );
                       })}
                       {memberUids.length > 3 && (
-                        <View className="w-4 h-4 rounded-full bg-gray-100 items-center justify-center border border-white -ml-1">
-                          <Text className="text-[8px] font-bold text-gray-600">
+                        <View className="w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center border border-white dark:border-gray-900 -ml-1">
+                          <Text className="text-[8px] font-bold text-gray-600 dark:text-gray-300">
                             +{memberUids.length - 3}
                           </Text>
                         </View>
                       )}
                     </View>
-                    <Text className="text-[10px] font-medium text-gray-500">
+                    <Text className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
                       {memberUids.length} {memberUids.length === 1 ? "member" : "members"}
                     </Text>
                   </View>
@@ -710,21 +771,21 @@ export default function ListDetailScreen() {
                 <IconButton
                   icon={showCompleted ? "eye" : "eye-off"}
                   onPress={() => setShowCompleted((prev) => !prev)}
-                  color={showCompleted ? "#4b5563" : "#9ca3af"}
+                  color={showCompleted ? (isDark ? "#9ca3af" : "#4b5563") : (isDark ? "#6b7280" : "#9ca3af")}
                   size={20}
                   className="p-1.5"
                 />
                 <IconButton
                   icon="reorder-three"
                   onPress={() => setReorderMode((prev) => !prev)}
-                  color={reorderMode ? "#16a34a" : "#4b5563"}
+                  color={reorderMode ? accent[600] : (isDark ? "#9ca3af" : "#4b5563")}
                   size={22}
                   className="p-1.5"
                 />
                 <IconButton
                   icon="share-outline"
                   onPress={() => setShowShare(true)}
-                  color="#4b5563"
+                  color={isDark ? "#9ca3af" : "#4b5563"}
                   size={20}
                   className="p-1.5"
                 />
@@ -736,12 +797,12 @@ export default function ListDetailScreen() {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 bg-gray-50"
+        className="flex-1 bg-gray-50 dark:bg-gray-950"
         keyboardVerticalOffset={0}
       >
         {totalCount > 0 && (
-          <View className="px-4 py-2">
-            <Text className="text-sm text-gray-400">
+          <View className="px-5 py-2">
+            <Text className="text-sm text-gray-400 dark:text-gray-500">
               {uncheckedCount} of {totalCount} remaining
             </Text>
           </View>
@@ -757,7 +818,7 @@ export default function ListDetailScreen() {
               layout={Layout.springify().damping(15)}
               className="px-4 py-2"
             >
-              <Text className="text-xs uppercase tracking-widest text-gray-400">
+              <Text className="text-xs uppercase tracking-widest text-gray-400 dark:text-gray-500">
                 {section.title}
               </Text>
             </Animated.View>
@@ -773,12 +834,13 @@ export default function ListDetailScreen() {
           }
         />
 
-        <View className="px-4 pb-3 pt-2 bg-white border-t border-gray-100">
-          <View className="flex-row items-end gap-3">
-            <View className="flex-1">
-              <AppTextInput
+        <View className="px-4 pb-3 pt-2 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
+          <View className="flex-row items-center gap-2">
+            <View className="flex-1 flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-xl px-4 h-12">
+              <TextInput
                 testID="add-item-input"
                 placeholder="Add an item..."
+                placeholderTextColor={isDark ? "#6b7280" : "#9ca3af"}
                 value={newItemName}
                 onChangeText={setNewItemName}
                 onSubmitEditing={handleAddItem}
@@ -786,36 +848,32 @@ export default function ListDetailScreen() {
                 blurOnSubmit={false}
                 onFocus={() => setInputFocused(true)}
                 onBlur={() => setTimeout(() => setInputFocused(false), 120)}
+                className="flex-1 text-base text-gray-900 dark:text-gray-100 h-12"
               />
-              {showSuggestions && (
-                <View className="mt-2 bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
-                  {suggestions.map((suggestion) => (
-                    <TouchableOpacity
-                      key={`${suggestion.name}-${suggestion.unit ?? "none"}-${
-                        suggestion.quantity
-                      }`}
-                      onPress={() => setNewItemName(buildSuggestionText(suggestion))}
-                      className="px-4 py-3 border-b border-gray-100"
-                    >
-                      <Text className="text-sm font-semibold text-gray-900">
-                        {suggestion.name}
-                      </Text>
-                      <Text className="text-xs text-gray-500 mt-0.5">
-                        {formatQuantityUnit(suggestion.quantity, suggestion.unit)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
+              {newItemName.trim() ? (
+                <TouchableOpacity
+                  onPress={handleAddItemDetailed}
+                  className="p-1.5"
+                  hitSlop={8}
+                >
+                  <Ionicons name="create-outline" size={18} color={accent[500]} />
+                </TouchableOpacity>
+              ) : null}
             </View>
-            <AppButton
+            <TouchableOpacity
               testID="add-item-submit"
               onPress={handleAddItem}
               disabled={adding || !newItemName.trim()}
-              loading={adding}
-              title="Add"
-              className="px-6"
-            />
+              className="w-11 h-11 rounded-xl items-center justify-center"
+              style={{ backgroundColor: !newItemName.trim() ? (isDark ? '#374151' : '#d1d5db') : accent[500] }}
+              activeOpacity={0.7}
+            >
+              {adding ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="arrow-up" size={20} color="#fff" />
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -826,10 +884,10 @@ export default function ListDetailScreen() {
           subtitle="Invite someone or manage members"
         >
           <View className="mb-4">
-            <Text className="text-sm font-semibold text-gray-900 mb-2">
+            <Text className="text-sm font-semibold text-gray-900 dark:text-gray-50 mb-2">
               Members
             </Text>
-            <View className="space-y-2">
+            <View className="gap-2">
               {memberUids.map((uid) => {
                 const profile = memberProfiles[uid];
                 const label = profile?.displayName || profile?.email || "Member";
@@ -837,27 +895,29 @@ export default function ListDetailScreen() {
                 return (
                   <View
                     key={uid}
-                    className="flex-row items-center justify-between bg-gray-50 rounded-xl px-3 py-2"
+                    className="flex-row items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2"
                   >
                     <View className="flex-row items-center">
                       <View
                         className={`w-9 h-9 rounded-full items-center justify-center mr-3 ${
-                          isOwner ? "bg-emerald-100" : "bg-white"
+                          isOwner ? "" : "bg-white dark:bg-gray-700"
                         }`}
+                        style={isOwner ? { backgroundColor: accent[100] } : undefined}
                       >
                         <Text
                           className={`text-xs font-semibold ${
-                            isOwner ? "text-emerald-700" : "text-gray-600"
+                            isOwner ? "" : "text-gray-600 dark:text-gray-300"
                           }`}
+                          style={isOwner ? { color: accent[700] } : undefined}
                         >
                           {getInitials(profile?.displayName, profile?.email)}
                         </Text>
                       </View>
                       <View>
-                        <Text className="text-sm font-semibold text-gray-900">
+                        <Text className="text-sm font-semibold text-gray-900 dark:text-gray-50">
                           {label}
                         </Text>
-                        <Text className="text-xs text-gray-400">
+                        <Text className="text-xs text-gray-400 dark:text-gray-500">
                           {isOwner ? "Owner" : "Member"}
                         </Text>
                       </View>
@@ -894,27 +954,35 @@ export default function ListDetailScreen() {
         </BottomSheet>
 
         <BottomSheet
-          visible={!!editingItem}
-          onClose={() => setEditingItem(null)}
-          title="Edit Item"
-          subtitle={editingItem?.name}
+          visible={!!editingItem || isNewItem}
+          onClose={() => {
+            setEditingItem(null);
+            setIsNewItem(false);
+            setCategoryOpen(false);
+          }}
+          title={isNewItem ? "Add Item" : "Edit Item"}
         >
-          <AppTextInput
-            label="Name"
-            value={editName}
-            onChangeText={setEditName}
-            placeholder="Item name"
-            className="mb-3"
-          />
-          <AppTextInput
-            label="Quantity"
-            value={editQuantity}
-            onChangeText={setEditQuantity}
-            keyboardType="numeric"
-            className="mb-3"
-          />
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-2">Unit</Text>
+          <View className="flex-row gap-3 mb-3">
+            <View className="flex-1">
+              <AppTextInput
+                label="Name"
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Item name"
+              />
+            </View>
+            <View className="w-20">
+              <AppTextInput
+                label="Qty"
+                value={editQuantity}
+                onChangeText={setEditQuantity}
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+
+          <View className="mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Unit</Text>
             <View className="flex-row flex-wrap gap-2">
               {UNITS.map((unit) => {
                 const active = editUnit === unit.value;
@@ -924,13 +992,18 @@ export default function ListDetailScreen() {
                     onPress={() => setEditUnit(active ? undefined : unit.value)}
                     className={`px-3 py-1.5 rounded-full border ${
                       active
-                        ? "bg-emerald-500 border-emerald-500"
-                        : "bg-white border-gray-200"
+                        ? ""
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                     }`}
+                    style={
+                      active
+                        ? { backgroundColor: accent[500], borderColor: accent[500] }
+                        : undefined
+                    }
                   >
                     <Text
                       className={`text-xs font-semibold ${
-                        active ? "text-white" : "text-gray-700"
+                        active ? "text-white" : "text-gray-700 dark:text-gray-300"
                       }`}
                     >
                       {unit.label}
@@ -940,62 +1013,128 @@ export default function ListDetailScreen() {
               })}
             </View>
           </View>
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-2">Category</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {CATEGORIES.map((category) => {
-                const active = editCategory === category.value;
-                return (
-                  <TouchableOpacity
-                    key={category.value}
-                    onPress={() => setEditCategory(category.value)}
-                    className={`flex-row items-center px-3 py-1.5 rounded-full border ${
-                      active
-                        ? "bg-emerald-500 border-emerald-500"
-                        : "bg-white border-gray-200"
-                    }`}
-                  >
-                    <View className="mr-1">
-                      <Ionicons
-                        name={category.icon as keyof typeof Ionicons.glyphMap}
-                        size={14}
-                        color={active ? "#fff" : "#6b7280"}
-                      />
-                    </View>
-                    <Text
-                      className={`text-xs font-semibold ${
-                        active ? "text-white" : "text-gray-700"
-                      }`}
-                    >
-                      {category.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-          <AppTextInput
-            label="Note"
-            value={editNote}
-            onChangeText={setEditNote}
-            placeholder="Optional notes"
-            multiline
-            className="mb-4"
-          />
 
-          <AppButton
-            title="Save changes"
-            onPress={handleSaveEdit}
-            loading={savingEdit}
-          />
-          {!!editingItem && (
-            <AppButton
-              title="Delete item"
-              variant="danger"
-              onPress={() => handleDelete(editingItem)}
-              className="mt-3"
+          <View className="mb-3">
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Category</Text>
+            
+            <TouchableOpacity
+              onPress={() => setCategoryOpen(!categoryOpen)}
+              activeOpacity={0.7}
+              className="flex-row items-center justify-between px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+            >
+              <View className="flex-row items-center">
+                {(() => {
+                  const selectedCat = allCategories.find((c) => c.value === editCategory);
+                  if (selectedCat) {
+                    return (
+                      <>
+                        <View className="mr-2">
+                          <Ionicons
+                            name={selectedCat.icon as keyof typeof Ionicons.glyphMap}
+                            size={16}
+                            color={accent[500]}
+                          />
+                        </View>
+                        <Text className="text-sm font-medium" style={{ color: accent[500] }}>
+                          {selectedCat.label}
+                        </Text>
+                      </>
+                    );
+                  }
+                  return (
+                    <Text className="text-sm text-gray-500 dark:text-gray-400">
+                      Select category
+                    </Text>
+                  );
+                })()}
+              </View>
+              <Ionicons
+                name={categoryOpen ? "chevron-up-outline" : "chevron-down-outline"}
+                size={16}
+                color={isDark ? "#9ca3af" : "#6b7280"}
+              />
+            </TouchableOpacity>
+
+            {categoryOpen && (
+              <ScrollView
+                style={{ maxHeight: 200 }}
+                nestedScrollEnabled
+                className="rounded-xl border border-gray-200 dark:border-gray-700 mt-1 overflow-hidden"
+              >
+                {allCategories.map((category, index) => {
+                  const isSelected = editCategory === category.value;
+                  const isLast = index === allCategories.length - 1;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={category.value}
+                      onPress={() => {
+                        setEditCategory(category.value);
+                        setCategoryOpen(false);
+                      }}
+                      className={`flex-row items-center px-3 py-2.5 ${
+                        !isLast ? "border-b border-gray-100 dark:border-gray-700" : ""
+                      } ${isSelected ? "" : "bg-white dark:bg-gray-800"}`}
+                      style={isSelected ? { backgroundColor: accent[500] } : undefined}
+                    >
+                      <View className="mr-2.5 w-5 items-center">
+                        <Ionicons
+                          name={category.icon as keyof typeof Ionicons.glyphMap}
+                          size={16}
+                          color={isSelected ? "#fff" : (isDark ? "#9ca3af" : "#6b7280")}
+                        />
+                      </View>
+                      <Text
+                        className={`text-sm ${
+                          isSelected
+                            ? "font-medium text-white"
+                            : "text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {category.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+
+          {showNoteField ? (
+            <AppTextInput
+              label="Note"
+              value={editNote}
+              onChangeText={setEditNote}
+              placeholder="Optional notes"
+              multiline
+              className="mb-3"
             />
+          ) : (
+            <TouchableOpacity
+              onPress={() => setShowNoteField(true)}
+              className="mb-3"
+            >
+              <Text className="text-sm" style={{ color: accent[500] }}>+ Add note</Text>
+            </TouchableOpacity>
           )}
+
+          <View className="flex-row items-center gap-3">
+            <View className="flex-1">
+              <AppButton
+                title="Save changes"
+                onPress={handleSaveEdit}
+                loading={savingEdit}
+              />
+            </View>
+            {!!editingItem && (
+              <TouchableOpacity
+                onPress={() => handleDelete(editingItem)}
+                className="w-10 h-10 rounded-full items-center justify-center bg-red-100 dark:bg-red-900/30"
+              >
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+              </TouchableOpacity>
+            )}
+          </View>
         </BottomSheet>
       </KeyboardAvoidingView>
     </SafeAreaView>
