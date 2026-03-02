@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Keyboard,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -228,6 +230,23 @@ export default function ListsScreen() {
     }
   };
 
+  // Auto-save rename when keyboard is dismissed
+  useEffect(() => {
+    if (!renamingId) return;
+    // Wait for keyboard to open before listening for dismiss
+    let sub: ReturnType<typeof Keyboard.addListener> | null = null;
+    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+      showSub.remove();
+      sub = Keyboard.addListener('keyboardDidHide', () => {
+        handleSubmitRename();
+      });
+    });
+    return () => {
+      showSub.remove();
+      sub?.remove();
+    };
+  }, [renamingId]);
+
   const handleReorder = ({ data }: { data: GroceryList[] }) => {
     const newOrder = data.map((l) => l.id);
     updatePreferences({ listOrder: newOrder });
@@ -292,8 +311,10 @@ export default function ListsScreen() {
             </View>
           </TouchableOpacity>
 
-          <View className="absolute top-4 right-4">
+          <View className="absolute top-4 right-4 z-10" style={{ elevation: 5 }}>
             <MenuView
+              isAnchoredToRight
+              themeVariant="dark"
               onPressAction={({ nativeEvent }) => {
                 if (nativeEvent.event === "rename") handleStartRename(item);
                 else if (nativeEvent.event === "duplicate") handleDuplicateList(item);

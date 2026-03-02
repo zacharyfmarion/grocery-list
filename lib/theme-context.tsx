@@ -47,7 +47,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Sync NativeWind whenever the user's choice changes.
   useEffect(() => {
-    setColorScheme(colorMode);
+    // NativeWind's setColorScheme doesn't accept "system" on Android —
+    // only pass "light" or "dark".
+    if (colorMode === "light" || colorMode === "dark") {
+      setColorScheme(colorMode);
+    }
   }, [colorMode, setColorScheme]);
 
   const handleSetColorMode = useCallback((mode: ColorMode) => {
