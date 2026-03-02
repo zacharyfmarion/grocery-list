@@ -10,6 +10,7 @@ import {
   SectionList,
   TextInput,
   ScrollView,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -119,20 +120,20 @@ const addedBy =
     <Animated.View
       entering={FadeIn.duration(200)}
       layout={Layout.springify().damping(15)}
-      className={`bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 px-4 py-3 mb-2 shadow-sm min-h-[72px] ${
+      className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 px-3 py-3 mx-5 mb-1.5 shadow-sm ${
         item.checked ? "opacity-60" : ""
       }`}
     >
-      <View className="flex-row items-start pt-1">
+      <View className="flex-row items-center">
         {reorderMode && !section.isCompleted ? (
-          <View className="mr-3">
-            <Ionicons name="reorder-two" size={22} color={isDark ? "#6b7280" : "#9ca3af"} />
+          <View className="mr-2.5">
+            <Ionicons name="reorder-two" size={20} color={isDark ? "#6b7280" : "#9ca3af"} />
           </View>
         ) : (
           <TouchableOpacity
             testID={`item-checkbox-${item.id}`}
             onPress={() => onToggle(item)}
-            className={`w-6 h-6 rounded-full border-2 items-center justify-center mr-3 mt-1 ${
+            className={`w-5 h-5 rounded-full border-2 items-center justify-center mr-2.5 ${
               item.checked ? "" : "border-gray-300 dark:border-gray-600"
             }`}
             style={
@@ -142,29 +143,31 @@ const addedBy =
             }
           >
             {item.checked && (
-              <Ionicons name="checkmark" size={16} color="white" />
+              <Ionicons name="checkmark" size={14} color="white" />
             )}
           </TouchableOpacity>
         )}
 
         <TouchableOpacity
           onPress={() => onToggle(item)}
-          className="flex-1"
+          className="flex-1 justify-center"
           activeOpacity={0.7}
         >
-          <Text
-            className={`text-base font-semibold ${
-              item.checked ? "text-gray-400 dark:text-gray-500 line-through" : "text-gray-900 dark:text-gray-50"
-            }`}
-            numberOfLines={1}
-          >
-            {item.name}
-          </Text>
-          <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1" numberOfLines={1}>
-            {formatQuantityDisplay(item)} · Added by {addedBy}
-          </Text>
+          <View className="flex-row items-center flex-wrap">
+            <Text
+              className={`text-sm font-semibold ${
+                item.checked ? "text-gray-400 dark:text-gray-500 line-through" : "text-gray-900 dark:text-gray-50"
+              }`}
+              numberOfLines={1}
+            >
+              {item.name}
+            </Text>
+            <Text className="text-xs text-gray-400 dark:text-gray-500 ml-1.5" numberOfLines={1}>
+              {formatQuantityDisplay(item)} · {addedBy}
+            </Text>
+          </View>
           {item.note ? (
-            <Text className="text-xs text-gray-400 dark:text-gray-500 mt-1" numberOfLines={1}>
+            <Text className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5" numberOfLines={1}>
               {item.note}
             </Text>
           ) : null}
@@ -173,9 +176,9 @@ const addedBy =
         {!reorderMode && (
           <TouchableOpacity
             onPress={() => onEdit(item)}
-            className="ml-3 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
+            className="ml-2 w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
           >
-            <Ionicons name="pencil" size={14} color={isDark ? "#9ca3af" : "#4b5563"} />
+            <Ionicons name="pencil" size={13} color={isDark ? "#9ca3af" : "#4b5563"} />
           </TouchableOpacity>
         )}
       </View>
@@ -448,6 +451,7 @@ totalCount,
       await recordItemUsage({ name, quantity: parsed.quantity || 1, unit: parsed.unit ?? null, category });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setNewItemName("");
+      Keyboard.dismiss();
     } catch (error) {
       console.error("Failed to add item:", error);
     } finally {
@@ -813,17 +817,15 @@ totalCount,
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           renderSectionHeader={({ section }) => (
-            <Animated.View
-              entering={FadeIn.duration(200)}
-              layout={Layout.springify().damping(15)}
-              className="px-4 py-2"
+            <View
+              className="px-5 py-2"
             >
               <Text className="text-xs uppercase tracking-widest text-gray-400 dark:text-gray-500">
                 {section.title}
               </Text>
-            </Animated.View>
+            </View>
           )}
-          contentContainerClassName="px-5 pb-6"
+          contentContainerClassName="pb-6"
           stickySectionHeadersEnabled={false}
           ListEmptyComponent={
             <EmptyState
