@@ -80,7 +80,7 @@ const CATEGORY_KEYWORDS: Record<GroceryCategory, string[]> = {
   meat: [
     "chicken", "beef", "pork", "steak", "ground beef", "ground turkey", "turkey",
     "bacon", "sausage", "ham", "lamb", "hot dog", "meatball", "ribs",
-    "brisket", "roast", "veal", "venison", "bison", "duck",
+    "brisket", "pot roast", "veal", "venison", "bison", "duck",
     "chicken breast", "chicken thigh", "chicken wing", "drumstick",
     "pork chop", "pork loin", "tenderloin", "ground pork", "chorizo",
     "prosciutto", "salami", "pepperoni", "bratwurst", "kielbasa",
@@ -265,25 +265,27 @@ export function suggestCategory(itemName: string): GroceryCategory {
     }
   }
 
-  // Pass 2: Substring match — input contains keyword or keyword contains input
+  // Pass 2: Word-boundary substring match — input contains keyword or keyword contains input
+  // Uses word boundaries to avoid false positives (e.g., 'corn' matching 'unicorn')
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (category === "other") continue;
     for (const keyword of keywords) {
-      if (lower.includes(keyword) || keyword.includes(lower)) {
+      const keywordRegex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+      if (keywordRegex.test(lower)) {
         return category as GroceryCategory;
       }
     }
   }
 
-  // Pass 3: Normalized/plural-tolerant matching
+  // Pass 3: Normalized/plural-tolerant matching with word boundaries
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (category === "other") continue;
     for (const keyword of keywords) {
       const normalizedKeyword = normalize(keyword);
+      const nkRegex = new RegExp(`\\b${normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
       if (
         normalizedInput === normalizedKeyword ||
-        normalizedInput.includes(normalizedKeyword) ||
-        normalizedKeyword.includes(normalizedInput)
+        nkRegex.test(normalizedInput)
       ) {
         return category as GroceryCategory;
       }
