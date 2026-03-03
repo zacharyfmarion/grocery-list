@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as SystemUI from "expo-system-ui";
 import { useEffect } from "react";
 import "react-native-reanimated";
 import "../global.css";
@@ -8,6 +9,11 @@ import { ThemeProvider, useTheme } from "@/lib/theme-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "react-native";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import {
+  ThemeProvider as NavThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+} from "@react-navigation/native";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -20,8 +26,29 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
+    <ThemeProvider>
+      <RootContent />
+    </ThemeProvider>
+  );
+}
+
+function RootContent() {
+  const { isDark } = useTheme();
+  const backgroundColor = isDark ? '#111827' : '#ffffff';
+
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(backgroundColor);
+  }, [backgroundColor]);
+
+  const navTheme = isDark
+    ? { ...DarkTheme, colors: { ...DarkTheme.colors, background: backgroundColor } }
+    : DefaultTheme;
+
+  return (
+    <NavThemeProvider value={navTheme}>
+      <GestureHandlerRootView
+        style={{ flex: 1, backgroundColor: isDark ? '#111827' : '#ffffff' }}
+      >
         <ThemedStatusBar />
         <AuthProvider>
           <OfflineBanner />
@@ -30,8 +57,8 @@ export default function RootLayout() {
             <Stack.Screen name="(app)" />
           </Stack>
         </AuthProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+      </GestureHandlerRootView>
+    </NavThemeProvider>
   );
 }
 

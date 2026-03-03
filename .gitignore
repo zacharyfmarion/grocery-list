@@ -60,3 +60,8 @@ GoogleService-Info.plist
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
+
+# Build artifacts
+*.apk
+*.ipa
+*.aab

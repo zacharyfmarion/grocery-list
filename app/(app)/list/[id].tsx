@@ -11,10 +11,11 @@ import {
   TextInput,
   ScrollView,
   Keyboard,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
-import { Swipeable, Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   FadeIn,
   Layout,
@@ -46,7 +47,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { IconButton } from "@/components/ui/IconButton";
 import { useTheme } from "@/lib/theme-context";
 
-const ITEM_HEIGHT = 72;
+const ITEM_HEIGHT = 76;
 
 type ListSection = {
   title: string;
@@ -120,20 +121,20 @@ const addedBy =
     <Animated.View
       entering={FadeIn.duration(200)}
       layout={Layout.springify().damping(15)}
-      className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 px-3 py-3 mx-5 mb-1.5 shadow-sm ${
+      className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 px-3.5 py-3.5 mx-5 mb-2 shadow-sm ${
         item.checked ? "opacity-60" : ""
       }`}
     >
       <View className="flex-row items-center">
         {reorderMode && !section.isCompleted ? (
           <View className="mr-2.5">
-            <Ionicons name="reorder-two" size={20} color={isDark ? "#6b7280" : "#9ca3af"} />
+            <Ionicons name="reorder-two" size={21} color={isDark ? "#6b7280" : "#9ca3af"} />
           </View>
         ) : (
           <TouchableOpacity
             testID={`item-checkbox-${item.id}`}
             onPress={() => onToggle(item)}
-            className={`w-5 h-5 rounded-full border-2 items-center justify-center mr-2.5 ${
+            className={`w-[22px] h-[22px] rounded-full border-2 items-center justify-center mr-2.5 ${
               item.checked ? "" : "border-gray-300 dark:border-gray-600"
             }`}
             style={
@@ -143,7 +144,7 @@ const addedBy =
             }
           >
             {item.checked && (
-              <Ionicons name="checkmark" size={14} color="white" />
+              <Ionicons name="checkmark" size={15} color="white" />
             )}
           </TouchableOpacity>
         )}
@@ -155,7 +156,7 @@ const addedBy =
         >
           <View className="flex-row items-center flex-wrap">
             <Text
-              className={`text-sm font-semibold ${
+              className={`text-[14px] font-semibold ${
                 item.checked ? "text-gray-400 dark:text-gray-500 line-through" : "text-gray-900 dark:text-gray-50"
               }`}
               numberOfLines={1}
@@ -167,7 +168,7 @@ const addedBy =
             </Text>
           </View>
           {item.note ? (
-            <Text className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5" numberOfLines={1}>
+            <Text className="text-xs text-gray-400 dark:text-gray-500 mt-0.5" numberOfLines={1}>
               {item.note}
             </Text>
           ) : null}
@@ -176,9 +177,9 @@ const addedBy =
         {!reorderMode && (
           <TouchableOpacity
             onPress={() => onEdit(item)}
-            className="ml-2 w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
+            className="ml-2 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
           >
-            <Ionicons name="pencil" size={13} color={isDark ? "#9ca3af" : "#4b5563"} />
+            <Ionicons name="pencil" size={14} color={isDark ? "#9ca3af" : "#4b5563"} />
           </TouchableOpacity>
         )}
       </View>
@@ -214,43 +215,7 @@ const addedBy =
     );
   }
 
-  return (
-    <Swipeable
-      renderLeftActions={() => (
-        <View className="flex-1 justify-center">
-          <TouchableOpacity
-            onPress={() => onToggle(item)}
-            className="rounded-2xl mx-1 px-5 py-4"
-            style={{ backgroundColor: accent[500] }}
-          >
-            <Text className="text-white font-semibold">
-              {item.checked ? "Restore" : "Done"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      renderRightActions={() => (
-        <View className="flex-1 justify-center items-end">
-          <TouchableOpacity
-            onPress={() => onDelete(item)}
-            className="bg-red-500 rounded-2xl mx-1 px-5 py-4"
-          >
-            <Text className="text-white font-semibold">Delete</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      onSwipeableOpen={(direction) => {
-        if (direction === "right") {
-          onToggle(item);
-        }
-        if (direction === "left") {
-          onDelete(item);
-        }
-      }}
-    >
-      {row}
-    </Swipeable>
-  );
+  return row;
 };
 
 export default function ListDetailScreen() {
@@ -444,14 +409,15 @@ totalCount,
     const name = parsed.name.trim();
     if (!name) return;
 
+    Keyboard.dismiss();
+    setNewItemName("");
+
     setAdding(true);
     try {
       const category = suggestCategory(name);
       await addItem({ name, quantity: parsed.quantity || 1, unit: parsed.unit ?? null, category });
       await recordItemUsage({ name, quantity: parsed.quantity || 1, unit: parsed.unit ?? null, category });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setNewItemName("");
-      Keyboard.dismiss();
     } catch (error) {
       console.error("Failed to add item:", error);
     } finally {
@@ -674,7 +640,7 @@ totalCount,
 
   return (
     <SafeAreaView edges={["top", "bottom"]} className="flex-1 bg-white dark:bg-gray-900">
-      <View className="bg-white dark:bg-gray-900 px-2 py-2 border-b border-gray-100 dark:border-gray-800 z-10">
+      <View className="bg-white dark:bg-gray-900 px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 z-10">
         <View className="flex-row items-center justify-between min-h-[44px]">
           {/* Left: Back */}
           <View className="flex-none w-[20%] items-start">
@@ -689,35 +655,6 @@ totalCount,
 
           {/* Center: Title & Members */}
           <View className="flex-1 items-center justify-center mx-2 max-w-[60%]">
-            {isRenaming ? (
-              <View className="flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden w-full">
-                <TextInput
-                  value={nameDraft}
-                  onChangeText={setNameDraft}
-                  className="flex-1 py-1.5 px-3 text-sm font-semibold text-gray-900 dark:text-gray-50 text-center"
-                  autoFocus
-                  returnKeyType="done"
-                  onSubmitEditing={handleRename}
-                  placeholder="List Name"
-                  clearButtonMode="while-editing"
-                  selectTextOnFocus
-                />
-                <View className="flex-row border-l border-gray-200 dark:border-gray-700">
-                  <TouchableOpacity onPress={handleRename} className="p-2 active:bg-gray-200 dark:active:bg-gray-700">
-                    <Ionicons name="checkmark" size={16} color={accent[600]} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setIsRenaming(false);
-                      setNameDraft(list?.name ?? "");
-                    }}
-                    className="p-2 active:bg-gray-200 dark:active:bg-gray-700"
-                  >
-                    <Ionicons name="close" size={16} color={isDark ? "#9ca3af" : "#6b7280"} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
               <TouchableOpacity
                 onPress={() => setIsRenaming(true)}
                 className="items-center justify-center w-full py-1"
@@ -736,7 +673,7 @@ totalCount,
                           <View
                             key={uid}
                             className={`w-4 h-4 rounded-full items-center justify-center border border-white dark:border-gray-900 -ml-1 ${
-                              uid === list?.ownerUid ? "" : "bg-gray-100 dark:bg-gray-800"
+                              uid === list?.ownerUid ? "" : "bg-white dark:bg-gray-800"
                             } ${index === 0 ? "ml-0" : ""}`}
                             style={uid === list?.ownerUid ? { backgroundColor: accent[100] } : undefined}
                           >
@@ -752,7 +689,7 @@ totalCount,
                         );
                       })}
                       {memberUids.length > 3 && (
-                        <View className="w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center border border-white dark:border-gray-900 -ml-1">
+                        <View className="w-4 h-4 rounded-full bg-white dark:bg-gray-800 items-center justify-center border border-white dark:border-gray-900 -ml-1">
                           <Text className="text-[8px] font-bold text-gray-600 dark:text-gray-300">
                             +{memberUids.length - 3}
                           </Text>
@@ -765,13 +702,10 @@ totalCount,
                   </View>
                 )}
               </TouchableOpacity>
-            )}
           </View>
 
           {/* Right: Actions */}
           <View className="flex-none w-[20%] flex-row items-center justify-end gap-0.5">
-            {!isRenaming && (
-              <>
                 <IconButton
                   icon={showCompleted ? "eye" : "eye-off"}
                   onPress={() => setShowCompleted((prev) => !prev)}
@@ -793,11 +727,9 @@ totalCount,
                   size={20}
                   className="p-1.5"
                 />
-              </>
-            )}
+          </View>
           </View>
         </View>
-      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -805,8 +737,8 @@ totalCount,
         keyboardVerticalOffset={0}
       >
         {totalCount > 0 && (
-          <View className="px-5 py-2">
-            <Text className="text-sm text-gray-400 dark:text-gray-500">
+          <View className="px-5 py-2.5">
+            <Text className="text-[15px] text-gray-400 dark:text-gray-500">
               {uncheckedCount} of {totalCount} remaining
             </Text>
           </View>
@@ -818,9 +750,9 @@ totalCount,
           renderItem={renderItem}
           renderSectionHeader={({ section }) => (
             <View
-              className="px-5 py-2"
+              className="px-5 py-2.5"
             >
-              <Text className="text-xs uppercase tracking-widest text-gray-400 dark:text-gray-500">
+              <Text className="text-[13px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
                 {section.title}
               </Text>
             </View>
@@ -1138,6 +1070,66 @@ totalCount,
             )}
           </View>
         </BottomSheet>
+        <Modal
+          visible={isRenaming}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => {
+            setIsRenaming(false);
+            setNameDraft(list?.name ?? "");
+          }}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            className="flex-1 items-center justify-center bg-black/50 px-4"
+          >
+            <TouchableOpacity
+              style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
+              activeOpacity={1}
+              onPress={() => {
+                setIsRenaming(false);
+                setNameDraft(list?.name ?? "");
+              }}
+            />
+            <View className="w-full bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl max-w-sm">
+              <Text className="text-lg font-bold text-gray-900 dark:text-gray-50 text-center mb-6">
+                Rename List
+              </Text>
+
+              <TextInput
+                value={nameDraft}
+                onChangeText={setNameDraft}
+                className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base text-gray-900 dark:text-gray-50 mb-6"
+                autoFocus
+                selectTextOnFocus
+                returnKeyType="done"
+                onSubmitEditing={handleRename}
+                placeholder="List Name"
+                placeholderTextColor={isDark ? "#9ca3af" : "#6b7280"}
+              />
+
+              <View className="flex-row gap-3">
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsRenaming(false);
+                    setNameDraft(list?.name ?? "");
+                  }}
+                  className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 rounded-xl items-center active:opacity-70"
+                >
+                  <Text className="font-semibold text-gray-900 dark:text-gray-50">Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleRename}
+                  className="flex-1 py-3 rounded-xl items-center active:opacity-70"
+                  style={{ backgroundColor: accent[500] }}
+                >
+                  <Text className="font-semibold text-white">Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
