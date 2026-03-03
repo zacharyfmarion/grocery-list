@@ -9,8 +9,7 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "prebuildCommand": "corepack enable"
+      "distribution": "internal"
     },
     "production": {
       "autoIncrement": true
