@@ -1,3 +1,4 @@
+import { forwardRef, type Ref } from "react";
 import { View, Text, TextInput, type TextInputProps } from "react-native";
 import { useTheme } from "@/lib/theme-context";
 
@@ -6,13 +7,16 @@ interface AppTextInputProps extends TextInputProps {
   error?: string;
 }
 
-export function AppTextInput({
-  label,
-  error,
-  className,
-  style,
-  ...props
-}: AppTextInputProps) {
+export const AppTextInput = forwardRef(function AppTextInput(
+  {
+    label,
+    error,
+    className,
+    style,
+    ...props
+  }: AppTextInputProps,
+  ref: Ref<TextInput>
+) {
   const { isDark } = useTheme();
   return (
     <View className={className}>
@@ -27,6 +31,7 @@ export function AppTextInput({
         } ${props.multiline ? "py-3" : ""}`}
         style={[{ lineHeight: 20, ...(!props.multiline ? { height: 48, textAlignVertical: "center" as const } : {}) }, style]}
         placeholderTextColor={isDark ? "#6b7280" : "#9ca3af"}
+        ref={ref}
         {...props}
       />
       {error && (
@@ -34,4 +39,4 @@ export function AppTextInput({
       )}
     </View>
   );
-}
+});

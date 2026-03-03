@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
@@ -53,6 +54,17 @@ export default function ListsScreen() {
   const [creating, setCreating] = useState(false);
   const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const createInputRef = useRef<TextInput>(null);
+
+  // On Android, autoFocus doesn't work inside a Modal. Focus manually after a short delay.
+  useEffect(() => {
+    if (showCreate && Platform.OS === 'android') {
+      const timer = setTimeout(() => {
+        createInputRef.current?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [showCreate]);
   const [renameValue, setRenameValue] = useState("");
 
   const getInitials = (value?: string | null) => {
@@ -171,7 +183,8 @@ export default function ListsScreen() {
               Haptics.notificationAsync(
                 Haptics.NotificationFeedbackType.Success
               );
-            } catch {
+            } catch (e) {
+              console.error('Failed to delete list:', e);
               Alert.alert("Error", "Failed to delete list");
             }
           },
@@ -337,12 +350,16 @@ export default function ListsScreen() {
                   title: "Share",
                   image: "square.and.arrow.up",
                 },
-                {
-                  id: "delete",
-                  title: "Delete",
-                  attributes: { destructive: true },
-                  image: "trash",
-                },
+                ...(item.ownerUid === user?.uid
+                  ? [
+                      {
+                        id: "delete",
+                        title: "Delete",
+                        attributes: { destructive: true } as const,
+                        image: "trash",
+                      },
+                    ]
+                  : []),
               ]}
             >
               <View className="p-2" hitSlop={8}>
@@ -421,11 +438,12 @@ export default function ListsScreen() {
       >
         <View>
           <AppTextInput
+            ref={createInputRef}
             testID="new-list-name-input"
             placeholder="List name (e.g. Safeway, Costco)"
             value={newListName}
             onChangeText={setNewListName}
-            autoFocus
+            autoFocus={Platform.OS === 'ios'}
             onSubmitEditing={handleCreateList}
             returnKeyType="done"
             className="mb-4"
