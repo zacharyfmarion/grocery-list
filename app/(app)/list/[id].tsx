@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView as RNKeyboardAvoidingView,
   Platform,
   SectionList,
   TextInput,
@@ -13,12 +13,11 @@ import {
   Keyboard,
   Modal,
 } from "react-native";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  FadeIn,
-  Layout,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -118,9 +117,7 @@ const addedBy =
         "Member";
 
   const row = (
-    <Animated.View
-      entering={FadeIn.duration(200)}
-      layout={Layout.springify().damping(15)}
+    <View
       className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 px-3.5 py-3.5 mx-5 mb-2 shadow-sm ${
         item.checked ? "opacity-60" : ""
       }`}
@@ -183,7 +180,7 @@ const addedBy =
           </TouchableOpacity>
         )}
       </View>
-    </Animated.View>
+    </View>
   );
 
   if (reorderMode && !section.isCompleted) {
@@ -462,6 +459,8 @@ totalCount,
         onPress: async () => {
           try {
             await deleteItem(item.id);
+            setEditingItem(null);
+            setIsNewItem(false);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch {
             Alert.alert("Error", "Failed to delete item");
@@ -731,10 +730,8 @@ totalCount,
           </View>
         </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <View
         className="flex-1 bg-gray-50 dark:bg-gray-950"
-        keyboardVerticalOffset={0}
       >
         {totalCount > 0 && (
           <View className="px-5 py-2.5">
@@ -768,7 +765,7 @@ totalCount,
           }
         />
 
-        <View className="px-4 pb-3 pt-2 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
           <View className="flex-row items-center gap-2">
             <View className="flex-1 flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-xl px-4 h-12">
               <TextInput
@@ -809,7 +806,7 @@ totalCount,
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardStickyView>
 
         <BottomSheet
           visible={showShare}
@@ -1079,7 +1076,7 @@ totalCount,
             setNameDraft(list?.name ?? "");
           }}
         >
-          <KeyboardAvoidingView
+          <RNKeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             className="flex-1 items-center justify-center bg-black/50 px-4"
           >
@@ -1128,9 +1125,9 @@ totalCount,
                 </TouchableOpacity>
               </View>
             </View>
-          </KeyboardAvoidingView>
+          </RNKeyboardAvoidingView>
         </Modal>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
