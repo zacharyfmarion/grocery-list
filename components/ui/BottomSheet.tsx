@@ -1,4 +1,5 @@
-import { View, Text, Modal, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, Modal, Pressable, ScrollView, Platform } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme-context";
 
@@ -28,7 +29,7 @@ export function BottomSheet({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         className="flex-1"
       >
         <Pressable

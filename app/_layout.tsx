@@ -7,6 +7,7 @@ import "../global.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ThemeProvider, useTheme } from "@/lib/theme-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { StatusBar } from "react-native";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import {
@@ -50,13 +51,15 @@ function RootContent() {
         style={{ flex: 1, backgroundColor: isDark ? '#111827' : '#ffffff' }}
       >
         <ThemedStatusBar />
-        <AuthProvider>
-          <OfflineBanner />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(app)" />
-          </Stack>
-        </AuthProvider>
+        <KeyboardProvider>
+          <AuthProvider>
+            <OfflineBanner />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(app)" />
+            </Stack>
+          </AuthProvider>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </NavThemeProvider>
   );
