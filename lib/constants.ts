@@ -404,7 +404,6 @@ export function formatQuantityUnit(quantity: number, unit?: string): string {
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
-  sortOrder: "category",
   hapticsEnabled: true,
   listOrder: [],
   hiddenCategories: [],

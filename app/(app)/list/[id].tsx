@@ -12,6 +12,7 @@ import {
   ScrollView,
   Keyboard,
   Modal,
+  type LayoutChangeEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -42,8 +43,6 @@ import { FAB } from "@/components/ui/FAB";
 import { showErrorToast } from "@/lib/toast";
 import { useTheme } from "@/lib/theme-context";
 
-const ITEM_HEIGHT = 76;
-
 type ListSection = {
   title: string;
   category?: GroceryCategory;
@@ -51,21 +50,27 @@ type ListSection = {
   isCompleted?: boolean;
 };
 
+type SectionMeasure = {
+  category: GroceryCategory;
+  y: number;
+};
+
 type ListItemRowProps = {
   item: GroceryItem;
   section: ListSection;
-  reorderMode: boolean;
-  userId?: string;
-  memberProfiles: Record<string, UserProfile | null>;
   inlineEditingItemId: string | null;
   inlineNameDraft: string;
   inlineSaving: boolean;
+  isDragging: boolean;
+  isActiveDropSection: boolean;
   onToggle: (item: GroceryItem) => void;
   onEdit: (item: GroceryItem) => void;
   onStartInlineEdit: (item: GroceryItem) => void;
   onInlineNameChange: (value: string) => void;
   onSaveInlineEdit: (item: GroceryItem) => void;
-  onReorder: (sectionTitle: string, itemId: string, offset: number) => void;
+  onDragStart: (item: GroceryItem) => void;
+  onDragMove: (absoluteY: number) => void;
+  onDragEnd: (item: GroceryItem) => void;
 };
 
 const getInitials = (name?: string, email?: string) => {
@@ -86,57 +91,56 @@ const formatQuantityDisplay = (item: GroceryItem) => {
 const ListItemRow = ({
   item,
   section,
-  reorderMode,
-  userId,
-  memberProfiles,
   inlineEditingItemId,
   inlineNameDraft,
   inlineSaving,
+  isDragging,
+  isActiveDropSection,
   onToggle,
   onEdit,
   onStartInlineEdit,
   onInlineNameChange,
   onSaveInlineEdit,
-  onReorder,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
 }: ListItemRowProps) => {
   const { accent, isDark } = useTheme();
-  const addedBy =
-    item.addedBy === userId
-      ? "You"
-      : memberProfiles[item.addedBy]?.displayName ||
-        memberProfiles[item.addedBy]?.email ||
-        "Member";
   const isInlineEditing = inlineEditingItemId === item.id;
+  const canDrag = !section.isCompleted && !item.checked && !isInlineEditing;
 
   const row = (
     <View
-      className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 px-3.5 py-3.5 mx-5 mb-2 shadow-sm ${
-        item.checked ? "opacity-60" : ""
-      }`}
+      className={`rounded-xl border px-3.5 py-3.5 mx-5 mb-2 shadow-sm ${
+        isActiveDropSection
+          ? "border-transparent"
+          : "bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800"
+      } ${item.checked ? "opacity-60" : ""}`}
+      style={isActiveDropSection ? { backgroundColor: isDark ? "#142033" : accent[50] } : undefined}
     >
+      {isActiveDropSection ? (
+        <View
+          className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl"
+          style={{ backgroundColor: accent[500] }}
+        />
+      ) : null}
       <View className="flex-row items-center">
-        {reorderMode && !section.isCompleted ? (
-          <View className="mr-2.5">
-            <Ionicons name="reorder-two" size={21} color={isDark ? "#6b7280" : "#9ca3af"} />
-          </View>
-        ) : (
-          <TouchableOpacity
-            testID={`item-checkbox-${item.id}`}
-            onPress={() => onToggle(item)}
-            className={`w-[22px] h-[22px] rounded-full border-2 items-center justify-center mr-2.5 ${
-              item.checked ? "" : "border-gray-300 dark:border-gray-600"
-            }`}
-            style={
-              item.checked ? { backgroundColor: accent[600], borderColor: accent[600] } : undefined
-            }
-          >
-            {item.checked && <Ionicons name="checkmark" size={15} color="white" />}
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          testID={`item-checkbox-${item.id}`}
+          onPress={() => onToggle(item)}
+          className={`w-[22px] h-[22px] rounded-full border-2 items-center justify-center mr-2.5 ${
+            item.checked ? "" : "border-gray-300 dark:border-gray-600"
+          }`}
+          style={
+            item.checked ? { backgroundColor: accent[600], borderColor: accent[600] } : undefined
+          }
+        >
+          {item.checked && <Ionicons name="checkmark" size={15} color="white" />}
+        </TouchableOpacity>
 
         {isInlineEditing ? (
           <View className="flex-1 justify-center">
-            <View className="flex-row items-start gap-3">
+            <View className={`flex-row gap-3 ${item.note ? "items-start" : "items-center"}`}>
               <View className="flex-1">
                 <TextInput
                   value={inlineNameDraft}
@@ -147,33 +151,20 @@ const ListItemRow = ({
                   className="text-[15px] font-semibold text-gray-900 dark:text-gray-50 py-0"
                 />
 
-                <View className="flex-row items-center flex-wrap mt-1">
-                  <Text
-                    className={`text-xs font-medium ${
-                      item.checked
-                        ? "text-gray-400 dark:text-gray-500"
-                        : "text-gray-500 dark:text-gray-400"
-                    }`}
-                    numberOfLines={1}
-                  >
-                    {addedBy}
+                {item.note ? (
+                  <Text className="mt-1 text-xs text-gray-400 dark:text-gray-500" numberOfLines={1}>
+                    {item.note}
                   </Text>
-                  {item.note ? (
-                    <Text
-                      className="text-xs text-gray-400 dark:text-gray-500 ml-1.5"
-                      numberOfLines={1}
-                    >
-                      · {item.note}
-                    </Text>
-                  ) : null}
-                </View>
+                ) : null}
               </View>
 
               <View
                 className={`min-w-[64px] rounded-full px-3 py-1 items-center justify-center ${
                   item.checked ? "bg-gray-100 dark:bg-gray-800" : ""
                 }`}
-                style={!item.checked ? { backgroundColor: accent[50] } : undefined}
+                style={
+                  !item.checked ? { backgroundColor: isDark ? "#1b2a41" : accent[50] } : undefined
+                }
               >
                 <Text
                   className={`text-[13px] font-bold ${
@@ -192,9 +183,9 @@ const ListItemRow = ({
             onPress={() => onStartInlineEdit(item)}
             className="flex-1 justify-center"
             activeOpacity={0.7}
-            disabled={reorderMode}
+            disabled={isDragging}
           >
-            <View className="flex-row items-start gap-3">
+            <View className={`flex-row gap-3 ${item.note ? "items-start" : "items-center"}`}>
               <View className="flex-1">
                 <Text
                   className={`text-[15px] font-semibold ${
@@ -207,33 +198,20 @@ const ListItemRow = ({
                   {item.name}
                 </Text>
 
-                <View className="flex-row items-center flex-wrap mt-1">
-                  <Text
-                    className={`text-xs font-medium ${
-                      item.checked
-                        ? "text-gray-400 dark:text-gray-500"
-                        : "text-gray-500 dark:text-gray-400"
-                    }`}
-                    numberOfLines={1}
-                  >
-                    {addedBy}
+                {item.note ? (
+                  <Text className="mt-1 text-xs text-gray-400 dark:text-gray-500" numberOfLines={1}>
+                    {item.note}
                   </Text>
-                  {item.note ? (
-                    <Text
-                      className="text-xs text-gray-400 dark:text-gray-500 ml-1.5"
-                      numberOfLines={1}
-                    >
-                      · {item.note}
-                    </Text>
-                  ) : null}
-                </View>
+                ) : null}
               </View>
 
               <View
                 className={`min-w-[64px] rounded-full px-3 py-1 items-center justify-center ${
                   item.checked ? "bg-gray-100 dark:bg-gray-800" : ""
                 }`}
-                style={!item.checked ? { backgroundColor: accent[50] } : undefined}
+                style={
+                  !item.checked ? { backgroundColor: isDark ? "#1b2a41" : accent[50] } : undefined
+                }
               >
                 <Text
                   className={`text-[13px] font-bold ${
@@ -249,39 +227,44 @@ const ListItemRow = ({
           </TouchableOpacity>
         )}
 
-        {!reorderMode && (
-          <TouchableOpacity
-            onPress={() => onEdit(item)}
-            disabled={isInlineEditing || inlineSaving}
-            className="ml-2 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
-          >
-            <Ionicons name="pencil" size={14} color={isDark ? "#9ca3af" : "#4b5563"} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={() => onEdit(item)}
+          disabled={isInlineEditing || inlineSaving || isDragging}
+          className="ml-2 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
+        >
+          <Ionicons name="pencil" size={14} color={isDark ? "#9ca3af" : "#4b5563"} />
+        </TouchableOpacity>
       </View>
     </View>
   );
 
-  if (reorderMode && !section.isCompleted) {
+  if (canDrag) {
     const translateY = useSharedValue(0);
     const dragging = useSharedValue(false);
     const pan = Gesture.Pan()
-      .onBegin(() => {
+      .activateAfterLongPress(220)
+      .onStart((event) => {
         dragging.value = true;
+        runOnJS(onDragStart)(item);
+        runOnJS(onDragMove)(event.absoluteY);
       })
       .onUpdate((event) => {
         translateY.value = event.translationY;
+        runOnJS(onDragMove)(event.absoluteY);
       })
-      .onEnd(() => {
-        const offset = Math.round(translateY.value / ITEM_HEIGHT);
-        runOnJS(onReorder)(section.title, item.id, offset);
+      .onFinalize(() => {
+        runOnJS(onDragEnd)(item);
         translateY.value = withSpring(0);
         dragging.value = false;
       });
 
     const animatedStyle = useAnimatedStyle(() => ({
       transform: [{ translateY: translateY.value }],
-      zIndex: dragging.value ? 10 : 1,
+      zIndex: dragging.value ? 20 : 1,
+      opacity: dragging.value ? 0.95 : 1,
+      shadowOpacity: dragging.value ? 0.18 : 0,
+      shadowRadius: dragging.value ? 16 : 0,
+      elevation: dragging.value ? 8 : 0,
     }));
 
     return (
@@ -304,8 +287,8 @@ export default function ListDetailScreen() {
     addItem,
     toggleItem,
     updateItem,
+    moveItemToCategory,
     deleteItem,
-    reorderItems,
     uncheckedCount,
     totalCount,
   } = useItems(id);
@@ -318,8 +301,6 @@ export default function ListDetailScreen() {
   const [shareEmail, setShareEmail] = useState("");
   const [sharing, setSharing] = useState(false);
   const [showCompleted, setShowCompleted] = useState(true);
-  const [reorderMode, setReorderMode] = useState(false);
-  const [orderedSections, setOrderedSections] = useState<ListSection[]>([]);
   const [memberProfiles, setMemberProfiles] = useState<Record<string, UserProfile | null>>({});
 
   const [isRenaming, setIsRenaming] = useState(false);
@@ -338,7 +319,11 @@ export default function ListDetailScreen() {
   const [inlineEditingItemId, setInlineEditingItemId] = useState<string | null>(null);
   const [inlineNameDraft, setInlineNameDraft] = useState("");
   const [inlineSaving, setInlineSaving] = useState(false);
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
+  const [dragTargetCategory, setDragTargetCategory] = useState<GroceryCategory | null>(null);
+  const [sectionMeasurements, setSectionMeasurements] = useState<SectionMeasure[]>([]);
   const editNameInputRef = useRef<TextInput>(null);
+  const sectionHeaderRefs = useRef<Partial<Record<GroceryCategory, View | null>>>({});
 
   useEffect(() => {
     setNameDraft(list?.name ?? "");
@@ -409,9 +394,10 @@ export default function ListDetailScreen() {
 
   const sortItems = useCallback((listItems: GroceryItem[]) => {
     return [...listItems].sort((a, b) => {
-      const orderA = a.order ?? Number.MAX_SAFE_INTEGER;
-      const orderB = b.order ?? Number.MAX_SAFE_INTEGER;
-      if (orderA !== orderB) return orderA - orderB;
+      const normalizedNameA = a.name.trim().toLowerCase();
+      const normalizedNameB = b.name.trim().toLowerCase();
+      const nameCompare = normalizedNameA.localeCompare(normalizedNameB);
+      if (nameCompare !== 0) return nameCompare;
       const timeA = a.createdAt?.toMillis?.() ?? Number.MAX_SAFE_INTEGER;
       const timeB = b.createdAt?.toMillis?.() ?? Number.MAX_SAFE_INTEGER;
       return timeA - timeB;
@@ -469,14 +455,7 @@ export default function ListDetailScreen() {
 
     return sections;
   }, [checkedItems, showCompleted, sortItems, uncheckedItems, visibleCategories]);
-
-  useEffect(() => {
-    if (reorderMode) {
-      setOrderedSections(sectionData);
-    }
-  }, [reorderMode, sectionData]);
-
-  const displaySections = reorderMode ? orderedSections : sectionData;
+  const displaySections = sectionData;
 
   const openNewItemEditor = (
     initialName = "",
@@ -651,11 +630,11 @@ export default function ListDetailScreen() {
 
   const handleStartInlineEdit = useCallback(
     (item: GroceryItem) => {
-      if (reorderMode) return;
+      if (draggingItemId) return;
       setInlineEditingItemId(item.id);
       setInlineNameDraft(item.name);
     },
-    [reorderMode],
+    [draggingItemId],
   );
 
   const handleSaveInlineEdit = useCallback(
@@ -684,54 +663,104 @@ export default function ListDetailScreen() {
     [inlineEditingItemId, inlineNameDraft, inlineSaving, updateItem],
   );
 
-  const handleReorder = useCallback(
-    (sectionTitle: string, itemId: string, offset: number) => {
-      if (!offset) return;
-      setOrderedSections((prev) => {
-        const next = prev.map((section) => ({ ...section, data: [...section.data] }));
-        const sectionIndex = next.findIndex((section) => section.title === sectionTitle);
-        if (sectionIndex === -1) return prev;
-        const targetSection = next[sectionIndex];
-        const currentIndex = targetSection.data.findIndex((item) => item.id === itemId);
-        if (currentIndex === -1) return prev;
-        const newIndex = Math.max(
-          0,
-          Math.min(targetSection.data.length - 1, currentIndex + offset),
-        );
-        if (currentIndex === newIndex) return prev;
-        const [moved] = targetSection.data.splice(currentIndex, 1);
-        targetSection.data.splice(newIndex, 0, moved);
+  const measureSectionHeaders = useCallback(() => {
+    const categoriesToMeasure = displaySections
+      .filter((section) => !section.isCompleted && section.category)
+      .map((section) => section.category as GroceryCategory);
 
-        const reorderedUnchecked = next
-          .filter((section) => !section.isCompleted)
-          .flatMap((section) => section.data);
-        const reordered = [...reorderedUnchecked, ...checkedItems];
-        reorderItems(reordered).catch(() => {
-          Alert.alert("Reorder failed", "Could not update item order.");
-        });
+    if (!categoriesToMeasure.length) {
+      setSectionMeasurements([]);
+      return;
+    }
 
-        return next;
-      });
+    Promise.all(
+      categoriesToMeasure.map(
+        (category) =>
+          new Promise<SectionMeasure | null>((resolve) => {
+            const ref = sectionHeaderRefs.current[category];
+            if (!ref?.measureInWindow) {
+              resolve(null);
+              return;
+            }
+
+            ref.measureInWindow((_x, y) => {
+              resolve({ category, y });
+            });
+          }),
+      ),
+    ).then((measures) => {
+      setSectionMeasurements(
+        measures
+          .filter((measure): measure is SectionMeasure => measure !== null)
+          .sort((a, b) => a.y - b.y),
+      );
+    });
+  }, [displaySections]);
+
+  const handleDragStart = useCallback(
+    (item: GroceryItem) => {
+      setInlineEditingItemId(null);
+      setInlineNameDraft("");
+      setDraggingItemId(item.id);
+      setDragTargetCategory(item.category ?? "other");
+      measureSectionHeaders();
     },
-    [checkedItems, reorderItems],
+    [measureSectionHeaders],
+  );
+
+  const handleDragMove = useCallback(
+    (absoluteY: number) => {
+      if (!sectionMeasurements.length) return;
+
+      for (let index = 0; index < sectionMeasurements.length; index += 1) {
+        const current = sectionMeasurements[index];
+        const next = sectionMeasurements[index + 1];
+        const lowerBound = current.y;
+        const upperBound = next?.y ?? Number.POSITIVE_INFINITY;
+
+        if (absoluteY >= lowerBound && absoluteY < upperBound) {
+          setDragTargetCategory(current.category);
+          return;
+        }
+      }
+    },
+    [sectionMeasurements],
+  );
+
+  const handleDragEnd = useCallback(
+    (item: GroceryItem) => {
+      const nextCategory = dragTargetCategory;
+      setDraggingItemId(null);
+      setDragTargetCategory(null);
+
+      if (!nextCategory) return;
+
+      const currentCategory = item.category ?? "other";
+      if (currentCategory === nextCategory) return;
+
+      void moveItemToCategory(item.id, nextCategory);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    },
+    [dragTargetCategory, moveItemToCategory],
   );
 
   const renderItem = ({ item, section }: { item: GroceryItem; section: ListSection }) => (
     <ListItemRow
       item={item}
       section={section}
-      reorderMode={reorderMode}
-      userId={user?.uid}
-      memberProfiles={memberProfiles}
       inlineEditingItemId={inlineEditingItemId}
       inlineNameDraft={inlineNameDraft}
       inlineSaving={inlineSaving}
+      isDragging={draggingItemId === item.id}
+      isActiveDropSection={!!section.category && dragTargetCategory === section.category}
       onToggle={handleToggle}
       onEdit={setEditingItem}
       onStartInlineEdit={handleStartInlineEdit}
       onInlineNameChange={setInlineNameDraft}
       onSaveInlineEdit={handleSaveInlineEdit}
-      onReorder={handleReorder}
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
+      onDragEnd={handleDragEnd}
     />
   );
 
@@ -827,13 +856,6 @@ export default function ListDetailScreen() {
                 className="p-1.5"
               />
               <IconButton
-                icon="reorder-three"
-                onPress={() => setReorderMode((prev) => !prev)}
-                color={reorderMode ? accent[600] : isDark ? "#9ca3af" : "#4b5563"}
-                size={22}
-                className="p-1.5"
-              />
-              <IconButton
                 icon="share-outline"
                 onPress={() => setShowShare(true)}
                 color={isDark ? "#9ca3af" : "#4b5563"}
@@ -859,7 +881,19 @@ export default function ListDetailScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           renderSectionHeader={({ section }) => (
-            <View className="px-5 py-2.5 flex-row items-center justify-between">
+            <View
+              ref={(ref) => {
+                if (section.category) {
+                  sectionHeaderRefs.current[section.category] = ref;
+                }
+              }}
+              onLayout={(_event: LayoutChangeEvent) => {
+                if (draggingItemId) {
+                  measureSectionHeaders();
+                }
+              }}
+              className="px-5 py-2.5 flex-row items-center justify-between"
+            >
               <Text className="text-[13px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
                 {section.title}
               </Text>
@@ -877,6 +911,8 @@ export default function ListDetailScreen() {
           )}
           contentContainerClassName="pb-6"
           stickySectionHeadersEnabled={false}
+          ItemSeparatorComponent={undefined}
+          SectionSeparatorComponent={() => <View className="h-1" />}
           ListEmptyComponent={
             <EmptyState
               icon="document-text-outline"
@@ -885,6 +921,7 @@ export default function ListDetailScreen() {
             />
           }
           contentContainerStyle={{ paddingBottom: 96 }}
+          scrollEnabled={!draggingItemId}
         />
 
         <FAB

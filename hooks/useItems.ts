@@ -4,18 +4,20 @@ import {
   query,
   orderBy,
   onSnapshot,
-  addDoc,
   deleteDoc,
+  setDoc,
   updateDoc,
   doc,
   serverTimestamp,
+  Timestamp,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { GroceryItem, GroceryCategory } from "@/types";
-import { suggestCategory } from "@/lib/constants";
+import { CATEGORY_LABEL_MAP, suggestCategory } from "@/lib/constants";
 import { showErrorToast, showUndoToast } from "@/lib/toast";
+import { registerUndo } from "@/lib/undo";
 
 interface AddItemParams {
   name: string;
@@ -43,6 +45,11 @@ interface PendingDelete {
   mutationId: string;
   item: GroceryItem;
   status: "scheduled" | "committing";
+}
+
+interface PendingCreate {
+  mutationId: string;
+  item: GroceryItem;
 }
 
 const DELETE_UNDO_MS = 4000;
@@ -73,13 +80,16 @@ export function useItems(listId: string) {
   const [loading, setLoading] = useState(true);
   const [pendingUpdates, setPendingUpdates] = useState<Record<string, PendingItemUpdate>>({});
   const [pendingDeletes, setPendingDeletes] = useState<Record<string, PendingDelete>>({});
+  const [pendingCreates, setPendingCreates] = useState<Record<string, PendingCreate>>({});
   const deleteTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const renderedItemsRef = useRef<GroceryItem[]>([]);
 
   useEffect(() => {
     if (!listId || !user) {
       setServerItems([]);
       setPendingUpdates({});
       setPendingDeletes({});
+      setPendingCreates({});
       setLoading(false);
       return;
     }
@@ -149,13 +159,44 @@ export function useItems(listId: string) {
 
       return changed ? next : prev;
     });
+
+    setPendingCreates((prev) => {
+      let changed = false;
+      const next: Record<string, PendingCreate> = {};
+
+      Object.entries(prev).forEach(([itemId, pending]) => {
+        const existsOnServer = serverItems.some((item) => item.id === itemId);
+        if (existsOnServer) {
+          changed = true;
+          return;
+        }
+        next[itemId] = pending;
+      });
+
+      return changed ? next : prev;
+    });
   }, [serverItems]);
 
   const renderedItems = useMemo(() => {
-    return serverItems
+    const optimisticCreates = Object.values(pendingCreates)
+      .map((entry) => entry.item)
+      .filter((item) => !pendingDeletes[item.id]);
+    const dedupedItems = new Map<string, GroceryItem>();
+
+    [...serverItems, ...optimisticCreates].forEach((item) => {
+      if (!dedupedItems.has(item.id)) {
+        dedupedItems.set(item.id, item);
+      }
+    });
+
+    return Array.from(dedupedItems.values())
       .filter((item) => !pendingDeletes[item.id])
       .map((item) => pendingUpdates[item.id]?.item ?? item);
-  }, [pendingDeletes, pendingUpdates, serverItems]);
+  }, [pendingCreates, pendingDeletes, pendingUpdates, serverItems]);
+
+  useEffect(() => {
+    renderedItemsRef.current = renderedItems;
+  }, [renderedItems]);
 
   // Sort: unchecked first (by category then order/name), then checked
   const sortedItems = useMemo(() => {
@@ -165,8 +206,8 @@ export function useItems(listId: string) {
   }, [renderedItems]);
 
   const getRenderedItem = useCallback(
-    (itemId: string) => renderedItems.find((item) => item.id === itemId),
-    [renderedItems],
+    (itemId: string) => renderedItemsRef.current.find((item) => item.id === itemId),
+    [],
   );
 
   const addItem = async (params: string | AddItemParams) => {
@@ -174,34 +215,74 @@ export function useItems(listId: string) {
 
     const input = typeof params === "string" ? { name: params } : params;
     const category = input.category ?? suggestCategory(input.name);
-
-    await addDoc(collection(db, "lists", listId, "items"), {
+    const itemsCollectionRef = collection(db, "lists", listId, "items");
+    const itemRef = doc(itemsCollectionRef);
+    const mutationId = createMutationId();
+    const now = Timestamp.now();
+    const optimisticItem: GroceryItem = {
+      id: itemRef.id,
       name: input.name,
       quantity: input.quantity ?? 1,
-      ...(input.unit && { unit: input.unit }),
+      ...(input.unit ? { unit: input.unit } : {}),
       category,
-      ...(input.note && { note: input.note }),
+      ...(input.note ? { note: input.note } : {}),
       checked: false,
       addedBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+      createdAt: now,
+      updatedAt: now,
+    };
 
-    // Update list's updatedAt
-    await updateDoc(doc(db, "lists", listId), {
-      updatedAt: serverTimestamp(),
-    });
+    setPendingCreates((prev) => ({
+      ...prev,
+      [itemRef.id]: {
+        mutationId,
+        item: optimisticItem,
+      },
+    }));
+
+    try {
+      await setDoc(itemRef, {
+        name: input.name,
+        quantity: input.quantity ?? 1,
+        ...(input.unit && { unit: input.unit }),
+        category,
+        ...(input.note && { note: input.note }),
+        checked: false,
+        addedBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      await updateDoc(doc(db, "lists", listId), {
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      setPendingCreates((prev) => {
+        if (prev[itemRef.id]?.mutationId !== mutationId) return prev;
+        const next = { ...prev };
+        delete next[itemRef.id];
+        return next;
+      });
+      showErrorToast("Couldn't add item");
+      throw error;
+    }
+
+    return itemRef.id;
   };
 
   const commitOptimisticUpdate = useCallback(
-    (
+    async (
       itemId: string,
       buildNextItem: (currentItem: GroceryItem) => GroceryItem,
       commit: () => Promise<void>,
       errorMessage: string,
     ) => {
       const currentItem = getRenderedItem(itemId);
-      if (!currentItem) return;
+      if (!currentItem) {
+        const missingItemError = new Error(`Missing rendered item for optimistic update: ${itemId}`);
+        console.error(missingItemError.message);
+        throw missingItemError;
+      }
 
       const mutationId = createMutationId();
       const nextItem = buildNextItem(currentItem);
@@ -214,39 +295,73 @@ export function useItems(listId: string) {
         },
       }));
 
-      void (async () => {
-        try {
-          await commit();
-        } catch (error) {
-          console.error("Optimistic item update failed:", error);
-          setPendingUpdates((prev) => {
-            if (prev[itemId]?.mutationId !== mutationId) return prev;
-            const next = { ...prev };
-            delete next[itemId];
-            return next;
-          });
-          showErrorToast(errorMessage);
-        }
-      })();
+      try {
+        await commit();
+      } catch (error) {
+        console.error("Optimistic item update failed:", {
+          itemId,
+          mutationId,
+          error,
+        });
+        setPendingUpdates((prev) => {
+          if (prev[itemId]?.mutationId !== mutationId) return prev;
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+        showErrorToast(errorMessage);
+        throw error;
+      }
     },
     [getRenderedItem],
   );
 
   const toggleItem = async (itemId: string, currentChecked: boolean) => {
-    await commitOptimisticUpdate(
-      itemId,
-      (currentItem) => ({
-        ...currentItem,
-        checked: !currentChecked,
-      }),
-      () =>
-        updateDoc(doc(db, "lists", listId, "items", itemId), {
-          checked: !currentChecked,
-          updatedAt: serverTimestamp(),
-        }),
-      "Couldn't update item",
-    );
+    await setItemCheckedState(itemId, !currentChecked, {
+      errorMessage: "Couldn't update item",
+    });
+
+    if (!currentChecked) {
+      const currentItem = getRenderedItem(itemId);
+      const itemName = currentItem?.name ?? "item";
+
+      registerUndo({
+        kind: "toggle",
+        message: `Checked off ${itemName}`,
+        resourceKey: `list:${listId}:item:${itemId}:toggle`,
+        undo: async () => {
+          await setItemCheckedState(itemId, false, {
+            errorMessage: "Couldn't undo check off",
+          });
+        },
+      });
+    }
   };
+
+  const setItemCheckedState = useCallback(
+    async (
+      itemId: string,
+      nextChecked: boolean,
+      options?: {
+        errorMessage?: string;
+      },
+    ) => {
+      await commitOptimisticUpdate(
+        itemId,
+        (currentItem) => ({
+          ...currentItem,
+          checked: nextChecked,
+        }),
+        () =>
+          updateDoc(doc(db, "lists", listId, "items", itemId), {
+            checked: nextChecked,
+            updatedAt: serverTimestamp(),
+          }),
+        options?.errorMessage ?? "Couldn't update item",
+      );
+    },
+    [commitOptimisticUpdate, listId],
+  );
 
   const updateQuantity = async (itemId: string, quantity: number) => {
     await commitOptimisticUpdate(
@@ -292,6 +407,50 @@ export function useItems(listId: string) {
         ? "Couldn't rename item"
         : "Couldn't save item",
     );
+  };
+
+  const moveItemToCategory = async (
+    itemId: string,
+    nextCategory: GroceryCategory,
+    options?: { registerUndo?: boolean; errorMessage?: string },
+  ) => {
+    const currentItem = getRenderedItem(itemId);
+    if (!currentItem) {
+      const missingItemError = new Error(`Cannot move missing item: ${itemId}`);
+      console.error(missingItemError.message);
+      throw missingItemError;
+    }
+
+    const previousCategory = currentItem.category ?? "other";
+    if (previousCategory === nextCategory) return;
+
+    await commitOptimisticUpdate(
+      itemId,
+      (item) => ({
+        ...item,
+        category: nextCategory,
+      }),
+      () =>
+        updateDoc(doc(db, "lists", listId, "items", itemId), {
+          category: nextCategory,
+          updatedAt: serverTimestamp(),
+        }),
+      options?.errorMessage ?? "Couldn't move item",
+    );
+
+    if (options?.registerUndo !== false) {
+      registerUndo({
+        kind: "edit",
+        message: `Moved ${currentItem.name} to ${CATEGORY_LABEL_MAP[nextCategory]}`,
+        resourceKey: `list:${listId}:item:${itemId}:category`,
+        undo: async () => {
+          await moveItemToCategory(itemId, previousCategory, {
+            registerUndo: false,
+            errorMessage: "Couldn't undo move",
+          });
+        },
+      });
+    }
   };
 
   const deleteItem = async (itemId: string) => {
@@ -380,6 +539,7 @@ export function useItems(listId: string) {
     toggleItem,
     updateQuantity,
     updateItem,
+    moveItemToCategory,
     deleteItem,
     reorderItems,
     uncheckedCount,

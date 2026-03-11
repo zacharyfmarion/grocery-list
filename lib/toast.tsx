@@ -1,3 +1,4 @@
+import { Dimensions, Text, TouchableOpacity, View } from "react-native";
 import { Toaster, toast } from "sonner-native";
 import { useTheme } from "@/lib/theme-context";
 
@@ -8,23 +9,60 @@ interface UndoToastOptions {
   durationMs?: number;
 }
 
+let currentToastTheme: {
+  isDark: boolean;
+  accent500: string;
+} = {
+  isDark: false,
+  accent500: "#22c55e",
+};
+
+const FAB_CLEARANCE_WIDTH = 88;
+const TOAST_SIDE_PADDING = 12;
+
 export function AppToaster() {
   const { accent, isDark } = useTheme();
+  currentToastTheme = {
+    isDark,
+    accent500: accent[500],
+  };
 
   return (
     <Toaster
       theme={isDark ? "dark" : "light"}
-      position="top-center"
-      richColors
-      offset={16}
-      closeButton
+      position="bottom-center"
+      offset={12}
+      visibleToasts={1}
       toastOptions={{
+        style: {
+          paddingVertical: 12,
+          paddingHorizontal: 14,
+          borderRadius: 16,
+          marginHorizontal: 12,
+        },
+        toastContainerStyle: {
+          width: "100%",
+          alignItems: "flex-start",
+          paddingHorizontal: TOAST_SIDE_PADDING,
+        },
+        titleStyle: {
+          fontSize: 14,
+          lineHeight: 18,
+          fontWeight: "600",
+        },
+        buttonsStyle: {
+          marginLeft: 12,
+        },
         actionButtonStyle: {
           backgroundColor: accent[500],
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          borderRadius: 999,
         },
         actionButtonTextStyle: {
           color: "#ffffff",
           fontWeight: "600",
+          fontSize: 13,
         },
       }}
     />
@@ -49,13 +87,68 @@ export function showUndoToast({
   onUndo,
   durationMs = 4000,
 }: UndoToastOptions) {
-  return toast(message, {
-    duration: durationMs,
-    action: {
-      label: actionLabel,
-      onClick: onUndo,
+  const id = `undo-toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const screenWidth = Dimensions.get("window").width;
+  const backgroundColor = currentToastTheme.isDark ? "#111827" : "#111827";
+  const borderColor = currentToastTheme.isDark ? "#1f2937" : "#0f172a";
+  const textColor = "#f9fafb";
+  const toastWidth = Math.max(220, screenWidth - FAB_CLEARANCE_WIDTH - TOAST_SIDE_PADDING * 2);
+
+  toast.custom(
+    <View
+      style={{
+        width: toastWidth,
+        backgroundColor,
+        borderColor,
+        borderWidth: 1,
+        borderRadius: 18,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+      }}
+    >
+      <View className="flex-row items-center justify-between gap-3">
+        <Text
+          numberOfLines={1}
+          style={{
+            color: textColor,
+            fontSize: 14,
+            fontWeight: "600",
+            flex: 1,
+          }}
+        >
+          {message}
+        </Text>
+        <TouchableOpacity
+          onPress={() => {
+            onUndo();
+          }}
+          activeOpacity={0.85}
+          style={{
+            backgroundColor: currentToastTheme.accent500,
+            borderRadius: 999,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+          }}
+        >
+          <Text
+            style={{
+              color: "#ffffff",
+              fontSize: 13,
+              fontWeight: "700",
+            }}
+          >
+            {actionLabel}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>,
+    {
+      id,
+      duration: durationMs,
     },
-  });
+  );
+
+  return id;
 }
 
 export function dismissToast(id?: string | number) {

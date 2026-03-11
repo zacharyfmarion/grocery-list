@@ -56,7 +56,6 @@ export interface UserProfile {
 }
 
 export interface UserPreferences {
-  sortOrder: "manual" | "alphabetical" | "category";
   hapticsEnabled: boolean;
   listOrder?: string[];
   hiddenCategories?: GroceryCategory[];

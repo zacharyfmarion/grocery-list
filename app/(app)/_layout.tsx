@@ -23,25 +23,16 @@ export default function AppLayout() {
     <Stack
       screenOptions={{
         headerShadowVisible: false,
-        headerStyle: { backgroundColor: isDark ? '#111827' : '#ffffff' },
-        headerTintColor: isDark ? '#f9fafb' : '#111827',
+        headerStyle: { backgroundColor: isDark ? "#111827" : "#ffffff" },
+        headerTintColor: isDark ? "#f9fafb" : "#111827",
         headerTitleStyle: { fontWeight: "600" },
         headerBackButtonDisplayMode: "minimal",
         headerLargeTitleShadowVisible: false,
       }}
     >
-      <Stack.Screen
-        name="index"
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="list/[id]"
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="settings"
-        options={{ headerShown: false }}
-      />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="list/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" options={{ headerShown: false }} />
     </Stack>
   );
 }
