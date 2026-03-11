@@ -112,6 +112,7 @@ export default function SettingsScreen() {
   const chevronColor = isDark ? "#6b7280" : "#9ca3af";
   const placeholderColor = isDark ? "#6b7280" : "#9ca3af";
   const segmentedBackground = isDark ? "#1f2937" : "#f3f4f6";
+  const accentSurface = isDark ? "#1b2a41" : accent[50];
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -158,7 +159,7 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="person"
             title="Display Name"
-            accentBackground={accent[50]}
+            accentBackground={accentSurface}
             accentColor={accent[600]}
             rightContent={
               isEditingName ? (
@@ -188,7 +189,7 @@ export default function SettingsScreen() {
             icon="mail"
             title="Email"
             subtitle={user?.email || "No email available"}
-            accentBackground={accent[50]}
+            accentBackground={accentSurface}
             accentColor={accent[600]}
             isLast
           />
@@ -200,7 +201,7 @@ export default function SettingsScreen() {
             <View className="mb-3 flex-row items-center">
               <View
                 className="mr-3 h-10 w-10 items-center justify-center rounded-2xl"
-                style={{ backgroundColor: accent[50] }}
+                style={{ backgroundColor: accentSurface }}
               >
                 <Ionicons name="contrast" size={18} color={accent[600]} />
               </View>
@@ -209,12 +210,12 @@ export default function SettingsScreen() {
                   Color Mode
                 </Text>
                 <Text className="text-sm text-gray-500 dark:text-gray-400">
-                  Match the app to your light or dark preference.
+                  Choose light, dark, or system.
                 </Text>
               </View>
             </View>
             <View
-              className="flex-row rounded-2xl p-1"
+              className="mt-4 flex-row rounded-2xl p-1"
               style={{ backgroundColor: segmentedBackground }}
             >
               {COLOR_MODE_OPTIONS.map((option) => {
@@ -250,7 +251,7 @@ export default function SettingsScreen() {
             <View className="mb-3 flex-row items-center">
               <View
                 className="mr-3 h-10 w-10 items-center justify-center rounded-2xl"
-                style={{ backgroundColor: accent[50] }}
+                style={{ backgroundColor: accentSurface }}
               >
                 <Ionicons name="color-palette" size={18} color={accent[600]} />
               </View>
@@ -259,11 +260,11 @@ export default function SettingsScreen() {
                   Accent Color
                 </Text>
                 <Text className="text-sm text-gray-500 dark:text-gray-400">
-                  Choose the color used for actions and highlights.
+                  Pick your app accent.
                 </Text>
               </View>
             </View>
-            <View className="-mx-1 flex-row flex-wrap">
+            <View className="mt-4 -mx-1 flex-row flex-wrap">
               {ACCENT_OPTIONS.map((option) => {
                 const palette = ACCENT_PALETTES[option.name as AccentName] as {
                   500: string;
@@ -287,7 +288,7 @@ export default function SettingsScreen() {
                         isSelected
                           ? {
                               borderColor: palette[600],
-                              backgroundColor: isDark ? "#111827" : accent[50],
+                              backgroundColor: isDark ? "#111827" : accentSurface,
                             }
                           : undefined
                       }
@@ -327,8 +328,8 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="grid"
             title="Categories"
-            subtitle="Show, hide, and reorder how categories appear in your lists."
-            accentBackground={accent[50]}
+            subtitle="Show, hide, and reorder categories."
+            accentBackground={accentSurface}
             accentColor={accent[600]}
             rightContent={<Ionicons name="chevron-forward" size={18} color={chevronColor} />}
             onPress={() => router.push("/settings/categories")}
@@ -336,8 +337,8 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="sparkles"
             title="Haptic Feedback"
-            subtitle="Use subtle vibrations for taps and completed actions."
-            accentBackground={accent[50]}
+            subtitle="Vibrate for taps and completions."
+            accentBackground={accentSurface}
             accentColor={accent[600]}
             rightContent={
               <Switch
@@ -361,14 +362,14 @@ export default function SettingsScreen() {
             icon="information-circle"
             title="Version"
             subtitle={appVersion}
-            accentBackground={accent[50]}
+            accentBackground={accentSurface}
             accentColor={accent[600]}
           />
           <SettingsRow
             icon="chatbubble-ellipses"
             title="Send Feedback"
-            subtitle="Email bug reports, ideas, or anything that feels rough."
-            accentBackground={accent[50]}
+            subtitle="Send bugs, ideas, or feedback."
+            accentBackground={accentSurface}
             accentColor={accent[600]}
             rightContent={<Ionicons name="chevron-forward" size={18} color={chevronColor} />}
             onPress={handleFeedback}

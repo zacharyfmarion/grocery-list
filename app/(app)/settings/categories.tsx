@@ -11,6 +11,7 @@ export default function CategoriesSettingsScreen() {
     useCategories();
 
   const chevronColor = isDark ? "#6b7280" : "#9ca3af";
+  const accentSurface = isDark ? "#1b2a41" : accent[50];
 
   const handleMoveCategory = useCallback(
     (index: number, direction: "up" | "down") => {
@@ -30,8 +31,7 @@ export default function CategoriesSettingsScreen() {
     <SafeAreaView className="flex-1 bg-gray-50 dark:bg-gray-950" edges={["bottom"]}>
       <ScrollView contentContainerClassName="px-5 pb-8 pt-4">
         <Text className="text-sm leading-5 text-gray-500 dark:text-gray-400">
-          Lists always group items by category. Customize which categories are visible and the order
-          they appear in.
+          Lists always group by category. Choose what shows and in what order.
         </Text>
 
         <View className="mt-4 overflow-hidden rounded-3xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
@@ -49,7 +49,7 @@ export default function CategoriesSettingsScreen() {
                 <View className="flex-row items-center px-4 py-4">
                   <View
                     className="mr-3 h-10 w-10 items-center justify-center rounded-2xl"
-                    style={{ backgroundColor: accent[50] }}
+                    style={{ backgroundColor: accentSurface }}
                   >
                     <Ionicons
                       name={category.icon as keyof typeof Ionicons.glyphMap}
@@ -64,10 +64,10 @@ export default function CategoriesSettingsScreen() {
                     </Text>
                     <Text className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
                       {isOther
-                        ? "Always visible as the fallback category."
+                        ? "Always shown as fallback."
                         : isVisible
-                          ? "Shown in your shopping list."
-                          : "Hidden and rolled into Other."}
+                          ? "Shown in your list."
+                          : "Hidden under Other."}
                     </Text>
                   </View>
 

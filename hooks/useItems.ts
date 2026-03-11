@@ -16,7 +16,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { GroceryItem, GroceryCategory } from "@/types";
 import { CATEGORY_LABEL_MAP, suggestCategory } from "@/lib/constants";
-import { showErrorToast, showUndoToast } from "@/lib/toast";
+import { showErrorToast } from "@/lib/toast";
 import { registerUndo } from "@/lib/undo";
 
 interface AddItemParams {
@@ -267,6 +267,20 @@ export function useItems(listId: string) {
       throw error;
     }
 
+    registerUndo({
+      kind: "create",
+      message: `Added ${optimisticItem.name}`,
+      resourceKey: `list:${listId}:item:${itemRef.id}:create`,
+      undo: async () => {
+        setPendingCreates((prev) => {
+          const next = { ...prev };
+          delete next[itemRef.id];
+          return next;
+        });
+        await deleteDoc(doc(db, "lists", listId, "items", itemRef.id));
+      },
+    });
+
     return itemRef.id;
   };
 
@@ -483,41 +497,49 @@ export function useItems(listId: string) {
       },
     }));
 
-    showUndoToast({
-      message: `Removed ${currentItem.name}`,
-      onUndo: undoDelete,
-      durationMs: DELETE_UNDO_MS,
-    });
-
-    deleteTimeoutsRef.current[itemId] = setTimeout(async () => {
-      setPendingDeletes((prev) => {
-        const pendingDelete = prev[itemId];
-        if (!pendingDelete || pendingDelete.mutationId !== mutationId) return prev;
-
-        return {
-          ...prev,
-          [itemId]: {
-            ...pendingDelete,
-            status: "committing",
-          },
-        };
-      });
-
-      try {
-        await deleteDoc(doc(db, "lists", listId, "items", itemId));
-      } catch (error) {
-        console.error("Optimistic delete failed:", error);
-        setPendingDeletes((prev) => {
-          if (prev[itemId]?.mutationId !== mutationId) return prev;
-          const next = { ...prev };
-          delete next[itemId];
-          return next;
-        });
-        showErrorToast("Couldn't delete item");
-      } finally {
-        delete deleteTimeoutsRef.current[itemId];
-      }
+    deleteTimeoutsRef.current[itemId] = setTimeout(() => {
+      delete deleteTimeoutsRef.current[itemId];
     }, DELETE_UNDO_MS);
+
+    registerUndo({
+      kind: "delete",
+      message: `Removed ${currentItem.name}`,
+      durationMs: DELETE_UNDO_MS,
+      resourceKey: `list:${listId}:item:${itemId}:delete`,
+      undo: async () => {
+        undoDelete();
+      },
+      commit: async () => {
+        setPendingDeletes((prev) => {
+          const pendingDelete = prev[itemId];
+          if (!pendingDelete || pendingDelete.mutationId !== mutationId) return prev;
+
+          return {
+            ...prev,
+            [itemId]: {
+              ...pendingDelete,
+              status: "committing",
+            },
+          };
+        });
+
+        try {
+          await deleteDoc(doc(db, "lists", listId, "items", itemId));
+        } catch (error) {
+          console.error("Optimistic delete failed:", error);
+          setPendingDeletes((prev) => {
+            if (prev[itemId]?.mutationId !== mutationId) return prev;
+            const next = { ...prev };
+            delete next[itemId];
+            return next;
+          });
+          showErrorToast("Couldn't delete item");
+          throw error;
+        } finally {
+          delete deleteTimeoutsRef.current[itemId];
+        }
+      },
+    });
   };
 
   const reorderItems = async (reorderedItems: GroceryItem[]) => {

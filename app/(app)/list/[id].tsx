@@ -40,7 +40,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { IconButton } from "@/components/ui/IconButton";
 import { FAB } from "@/components/ui/FAB";
-import { showErrorToast } from "@/lib/toast";
+import { dismissToast, showErrorToast } from "@/lib/toast";
 import { useTheme } from "@/lib/theme-context";
 
 type ListSection = {
@@ -462,6 +462,7 @@ export default function ListDetailScreen() {
     category?: GroceryCategory,
     options?: { autoFocusName?: boolean },
   ) => {
+    dismissToast();
     const parsed = parseItemInput(initialName);
     const name = parsed.name.trim();
 

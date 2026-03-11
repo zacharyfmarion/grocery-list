@@ -20,6 +20,19 @@ let currentToastTheme: {
 const FAB_CLEARANCE_WIDTH = 88;
 const TOAST_SIDE_PADDING = 12;
 
+function AppToastWrapper({
+  children,
+}: {
+  children: React.ReactNode;
+  toastId: string | number;
+}) {
+  return (
+    <View pointerEvents="box-none" className="w-full">
+      {children}
+    </View>
+  );
+}
+
 export function AppToaster() {
   const { accent, isDark } = useTheme();
   currentToastTheme = {
@@ -33,17 +46,18 @@ export function AppToaster() {
       position="bottom-center"
       offset={12}
       visibleToasts={1}
+      ToastWrapper={AppToastWrapper}
       toastOptions={{
+        toastContainerStyle: {
+          alignSelf: "flex-start",
+          width: "auto",
+          maxWidth: "100%",
+        },
         style: {
           paddingVertical: 12,
           paddingHorizontal: 14,
           borderRadius: 16,
           marginHorizontal: 12,
-        },
-        toastContainerStyle: {
-          width: "100%",
-          alignItems: "flex-start",
-          paddingHorizontal: TOAST_SIDE_PADDING,
         },
         titleStyle: {
           fontSize: 14,
@@ -98,6 +112,7 @@ export function showUndoToast({
     <View
       style={{
         width: toastWidth,
+        marginLeft: TOAST_SIDE_PADDING,
         backgroundColor,
         borderColor,
         borderWidth: 1,
