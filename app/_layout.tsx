@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { StatusBar } from "react-native";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { AppToaster } from "@/lib/toast";
 import {
   ThemeProvider as NavThemeProvider,
   DarkTheme,
@@ -35,7 +36,7 @@ export default function RootLayout() {
 
 function RootContent() {
   const { isDark } = useTheme();
-  const backgroundColor = isDark ? '#111827' : '#ffffff';
+  const backgroundColor = isDark ? "#111827" : "#ffffff";
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(backgroundColor);
@@ -47,9 +48,7 @@ function RootContent() {
 
   return (
     <NavThemeProvider value={navTheme}>
-      <GestureHandlerRootView
-        style={{ flex: 1, backgroundColor: isDark ? '#111827' : '#ffffff' }}
-      >
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: isDark ? "#111827" : "#ffffff" }}>
         <ThemedStatusBar />
         <KeyboardProvider>
           <AuthProvider>
@@ -58,6 +57,7 @@ function RootContent() {
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(app)" />
             </Stack>
+            <AppToaster />
           </AuthProvider>
         </KeyboardProvider>
       </GestureHandlerRootView>

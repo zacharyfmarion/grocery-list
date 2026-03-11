@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,6 @@ import {
   Keyboard,
   Modal,
 } from "react-native";
-import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -33,17 +32,14 @@ import { useLists } from "@/hooks/useLists";
 import { useItemHistory } from "@/hooks/useItemHistory";
 import { useCategories } from "@/hooks/useCategories";
 import { GroceryCategory, GroceryItem, UserProfile } from "@/types";
-import {
-  parseItemInput,
-  formatQuantityUnit,
-  UNITS,
-  suggestCategory,
-} from "@/lib/constants";
+import { parseItemInput, formatQuantityUnit, UNITS, suggestCategory } from "@/lib/constants";
 import { AppTextInput } from "@/components/ui/AppTextInput";
 import { AppButton } from "@/components/ui/AppButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { IconButton } from "@/components/ui/IconButton";
+import { FAB } from "@/components/ui/FAB";
+import { showErrorToast } from "@/lib/toast";
 import { useTheme } from "@/lib/theme-context";
 
 const ITEM_HEIGHT = 76;
@@ -61,9 +57,14 @@ type ListItemRowProps = {
   reorderMode: boolean;
   userId?: string;
   memberProfiles: Record<string, UserProfile | null>;
+  inlineEditingItemId: string | null;
+  inlineNameDraft: string;
+  inlineSaving: boolean;
   onToggle: (item: GroceryItem) => void;
-  onDelete: (item: GroceryItem) => void;
   onEdit: (item: GroceryItem) => void;
+  onStartInlineEdit: (item: GroceryItem) => void;
+  onInlineNameChange: (value: string) => void;
+  onSaveInlineEdit: (item: GroceryItem) => void;
   onReorder: (sectionTitle: string, itemId: string, offset: number) => void;
 };
 
@@ -74,21 +75,6 @@ const getInitials = (name?: string, email?: string) => {
   const first = parts[0]?.[0] ?? "";
   const second = parts[1]?.[0] ?? "";
   return `${first}${second}`.toUpperCase();
-};
-
-const buildSuggestionText = (item: {
-  name: string;
-  quantity: number;
-  unit?: string;
-}) => {
-  if (item.unit) {
-    const unitLabel = UNITS.find((u) => u.value === item.unit)?.label ?? item.unit;
-    return `${item.quantity} ${unitLabel} ${item.name}`.trim();
-  }
-  if (item.quantity && item.quantity !== 1) {
-    return `${item.quantity} ${item.name}`.trim();
-  }
-  return item.name;
 };
 
 const formatQuantityDisplay = (item: GroceryItem) => {
@@ -103,18 +89,24 @@ const ListItemRow = ({
   reorderMode,
   userId,
   memberProfiles,
+  inlineEditingItemId,
+  inlineNameDraft,
+  inlineSaving,
   onToggle,
-  onDelete,
   onEdit,
-onReorder,
+  onStartInlineEdit,
+  onInlineNameChange,
+  onSaveInlineEdit,
+  onReorder,
 }: ListItemRowProps) => {
   const { accent, isDark } = useTheme();
-const addedBy =
+  const addedBy =
     item.addedBy === userId
       ? "You"
       : memberProfiles[item.addedBy]?.displayName ||
         memberProfiles[item.addedBy]?.email ||
         "Member";
+  const isInlineEditing = inlineEditingItemId === item.id;
 
   const row = (
     <View
@@ -135,45 +127,132 @@ const addedBy =
               item.checked ? "" : "border-gray-300 dark:border-gray-600"
             }`}
             style={
-              item.checked
-                ? { backgroundColor: accent[600], borderColor: accent[600] }
-                : undefined
+              item.checked ? { backgroundColor: accent[600], borderColor: accent[600] } : undefined
             }
           >
-            {item.checked && (
-              <Ionicons name="checkmark" size={15} color="white" />
-            )}
+            {item.checked && <Ionicons name="checkmark" size={15} color="white" />}
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          onPress={() => onToggle(item)}
-          className="flex-1 justify-center"
-          activeOpacity={0.7}
-        >
-          <View className="flex-row items-center flex-wrap">
-            <Text
-              className={`text-[14px] font-semibold ${
-                item.checked ? "text-gray-400 dark:text-gray-500 line-through" : "text-gray-900 dark:text-gray-50"
-              }`}
-              numberOfLines={1}
-            >
-              {item.name}
-            </Text>
-            <Text className="text-xs text-gray-400 dark:text-gray-500 ml-1.5" numberOfLines={1}>
-              {formatQuantityDisplay(item)} · {addedBy}
-            </Text>
+        {isInlineEditing ? (
+          <View className="flex-1 justify-center">
+            <View className="flex-row items-start gap-3">
+              <View className="flex-1">
+                <TextInput
+                  value={inlineNameDraft}
+                  onChangeText={onInlineNameChange}
+                  onEndEditing={() => onSaveInlineEdit(item)}
+                  autoFocus
+                  returnKeyType="done"
+                  className="text-[15px] font-semibold text-gray-900 dark:text-gray-50 py-0"
+                />
+
+                <View className="flex-row items-center flex-wrap mt-1">
+                  <Text
+                    className={`text-xs font-medium ${
+                      item.checked
+                        ? "text-gray-400 dark:text-gray-500"
+                        : "text-gray-500 dark:text-gray-400"
+                    }`}
+                    numberOfLines={1}
+                  >
+                    {addedBy}
+                  </Text>
+                  {item.note ? (
+                    <Text
+                      className="text-xs text-gray-400 dark:text-gray-500 ml-1.5"
+                      numberOfLines={1}
+                    >
+                      · {item.note}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+
+              <View
+                className={`min-w-[64px] rounded-full px-3 py-1 items-center justify-center ${
+                  item.checked ? "bg-gray-100 dark:bg-gray-800" : ""
+                }`}
+                style={!item.checked ? { backgroundColor: accent[50] } : undefined}
+              >
+                <Text
+                  className={`text-[13px] font-bold ${
+                    item.checked ? "text-gray-500 dark:text-gray-400" : ""
+                  }`}
+                  style={!item.checked ? { color: accent[700] } : undefined}
+                  numberOfLines={1}
+                >
+                  {formatQuantityDisplay(item)}
+                </Text>
+              </View>
+            </View>
           </View>
-          {item.note ? (
-            <Text className="text-xs text-gray-400 dark:text-gray-500 mt-0.5" numberOfLines={1}>
-              {item.note}
-            </Text>
-          ) : null}
-        </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => onStartInlineEdit(item)}
+            className="flex-1 justify-center"
+            activeOpacity={0.7}
+            disabled={reorderMode}
+          >
+            <View className="flex-row items-start gap-3">
+              <View className="flex-1">
+                <Text
+                  className={`text-[15px] font-semibold ${
+                    item.checked
+                      ? "text-gray-400 dark:text-gray-500 line-through"
+                      : "text-gray-900 dark:text-gray-50"
+                  }`}
+                  numberOfLines={1}
+                >
+                  {item.name}
+                </Text>
+
+                <View className="flex-row items-center flex-wrap mt-1">
+                  <Text
+                    className={`text-xs font-medium ${
+                      item.checked
+                        ? "text-gray-400 dark:text-gray-500"
+                        : "text-gray-500 dark:text-gray-400"
+                    }`}
+                    numberOfLines={1}
+                  >
+                    {addedBy}
+                  </Text>
+                  {item.note ? (
+                    <Text
+                      className="text-xs text-gray-400 dark:text-gray-500 ml-1.5"
+                      numberOfLines={1}
+                    >
+                      · {item.note}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+
+              <View
+                className={`min-w-[64px] rounded-full px-3 py-1 items-center justify-center ${
+                  item.checked ? "bg-gray-100 dark:bg-gray-800" : ""
+                }`}
+                style={!item.checked ? { backgroundColor: accent[50] } : undefined}
+              >
+                <Text
+                  className={`text-[13px] font-bold ${
+                    item.checked ? "text-gray-500 dark:text-gray-400" : ""
+                  }`}
+                  style={!item.checked ? { color: accent[700] } : undefined}
+                  numberOfLines={1}
+                >
+                  {formatQuantityDisplay(item)}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {!reorderMode && (
           <TouchableOpacity
             onPress={() => onEdit(item)}
+            disabled={isInlineEditing || inlineSaving}
             className="ml-2 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center"
           >
             <Ionicons name="pencil" size={14} color={isDark ? "#9ca3af" : "#4b5563"} />
@@ -217,37 +296,31 @@ const addedBy =
 
 export default function ListDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-const { user } = useAuth();
+  const { user } = useAuth();
   const { accent, isDark } = useTheme();
   const {
-items,
-loading,
-addItem,
-toggleItem,
-updateQuantity,
-updateItem,
-deleteItem,
-reorderItems,
-uncheckedCount,
-totalCount,
-} = useItems(id);
+    items,
+    loading,
+    addItem,
+    toggleItem,
+    updateItem,
+    deleteItem,
+    reorderItems,
+    uncheckedCount,
+    totalCount,
+  } = useItems(id);
   const { lists, shareList, renameList } = useLists();
-  const { getSuggestions, recordItemUsage } = useItemHistory();
+  const { recordItemUsage } = useItemHistory();
   const { visibleCategories, allCategories } = useCategories();
   const list = lists.find((l) => l.id === id);
 
-  const [newItemName, setNewItemName] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [inputFocused, setInputFocused] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [sharing, setSharing] = useState(false);
   const [showCompleted, setShowCompleted] = useState(true);
   const [reorderMode, setReorderMode] = useState(false);
   const [orderedSections, setOrderedSections] = useState<ListSection[]>([]);
-  const [memberProfiles, setMemberProfiles] = useState<
-    Record<string, UserProfile | null>
-  >({});
+  const [memberProfiles, setMemberProfiles] = useState<Record<string, UserProfile | null>>({});
 
   const [isRenaming, setIsRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(list?.name ?? "");
@@ -256,14 +329,16 @@ totalCount,
   const [editName, setEditName] = useState("");
   const [editQuantity, setEditQuantity] = useState("1");
   const [editUnit, setEditUnit] = useState<string | undefined>(undefined);
-  const [editCategory, setEditCategory] = useState<GroceryCategory | undefined>(
-    undefined
-  );
+  const [editCategory, setEditCategory] = useState<GroceryCategory | undefined>(undefined);
   const [editNote, setEditNote] = useState("");
   const [showNoteField, setShowNoteField] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
   const [isNewItem, setIsNewItem] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [autoFocusItemName, setAutoFocusItemName] = useState(false);
+  const [inlineEditingItemId, setInlineEditingItemId] = useState<string | null>(null);
+  const [inlineNameDraft, setInlineNameDraft] = useState("");
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const editNameInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     setNameDraft(list?.name ?? "");
@@ -289,7 +364,7 @@ totalCount,
             uid,
             profile: snap.exists() ? (snap.data() as UserProfile) : null,
           };
-        })
+        }),
       );
       if (!active) return;
       const next: Record<string, UserProfile | null> = {};
@@ -317,22 +392,28 @@ totalCount,
     }
   }, [editingItem]);
 
-  const uncheckedItems = useMemo(
-    () => items.filter((item) => !item.checked),
-    [items]
-  );
-  const checkedItems = useMemo(
-    () => items.filter((item) => item.checked),
-    [items]
-  );
+  useEffect(() => {
+    if (!(isNewItem && autoFocusItemName) || Platform.OS !== "android") {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      editNameInputRef.current?.focus();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [autoFocusItemName, editNameInputRef, isNewItem]);
+
+  const uncheckedItems = useMemo(() => items.filter((item) => !item.checked), [items]);
+  const checkedItems = useMemo(() => items.filter((item) => item.checked), [items]);
 
   const sortItems = useCallback((listItems: GroceryItem[]) => {
     return [...listItems].sort((a, b) => {
       const orderA = a.order ?? Number.MAX_SAFE_INTEGER;
       const orderB = b.order ?? Number.MAX_SAFE_INTEGER;
       if (orderA !== orderB) return orderA - orderB;
-      const timeA = a.createdAt?.toMillis?.() ?? 0;
-      const timeB = b.createdAt?.toMillis?.() ?? 0;
+      const timeA = a.createdAt?.toMillis?.() ?? Number.MAX_SAFE_INTEGER;
+      const timeB = b.createdAt?.toMillis?.() ?? Number.MAX_SAFE_INTEGER;
       return timeA - timeB;
     });
   }, []);
@@ -343,9 +424,7 @@ totalCount,
 
     // 1. Create sections for visible categories
     visibleCategories.forEach((category) => {
-      const data = uncheckedItems.filter(
-        (item) => (item.category ?? "other") === category.value
-      );
+      const data = uncheckedItems.filter((item) => (item.category ?? "other") === category.value);
       if (data.length) {
         sections.push({
           title: category.label,
@@ -357,7 +436,7 @@ totalCount,
 
     // 2. Collect items from hidden categories (or unknown categories)
     const hiddenItems = uncheckedItems.filter(
-      (item) => !visibleValues.has(item.category ?? "other")
+      (item) => !visibleValues.has(item.category ?? "other"),
     );
 
     // 3. Add hidden items to "Other" section (create or merge)
@@ -399,46 +478,27 @@ totalCount,
 
   const displaySections = reorderMode ? orderedSections : sectionData;
 
-
-
-  const handleAddItem = async () => {
-    const parsed = parseItemInput(newItemName);
-    const name = parsed.name.trim();
-    if (!name) return;
-
-    Keyboard.dismiss();
-    setNewItemName("");
-
-    setAdding(true);
-    try {
-      const category = suggestCategory(name);
-      await addItem({ name, quantity: parsed.quantity || 1, unit: parsed.unit ?? null, category });
-      await recordItemUsage({ name, quantity: parsed.quantity || 1, unit: parsed.unit ?? null, category });
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (error) {
-      console.error("Failed to add item:", error);
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const handleAddItemDetailed = () => {
-    const parsed = parseItemInput(newItemName);
+  const openNewItemEditor = (
+    initialName = "",
+    category?: GroceryCategory,
+    options?: { autoFocusName?: boolean },
+  ) => {
+    const parsed = parseItemInput(initialName);
     const name = parsed.name.trim();
 
     setEditName(name);
     setEditQuantity(String(parsed.quantity || 1));
     setEditUnit(parsed.unit);
-    setEditCategory(name ? suggestCategory(name) : undefined);
+    setEditCategory(category ?? (name ? suggestCategory(name) : undefined));
     setEditNote("");
     setShowNoteField(false);
     setIsNewItem(true);
     setCategoryOpen(false);
-    setEditingItem({} as GroceryItem);
-    setNewItemName("");
-    setIsNewItem(true);
-    setEditingItem({} as GroceryItem);
-    setNewItemName("");
+    setAutoFocusItemName(options?.autoFocusName ?? false);
+    setEditingItem(null);
+    setInlineEditingItemId(null);
+    setInlineNameDraft("");
+    Keyboard.dismiss();
   };
 
   const handleToggle = async (item: GroceryItem) => {
@@ -468,17 +528,6 @@ totalCount,
         },
       },
     ]);
-  };
-
-  const handleQuantityChange = async (item: GroceryItem, delta: number) => {
-    const newQty = item.quantity + delta;
-    if (newQty < 1) return;
-    try {
-      await updateQuantity(item.id, newQty);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (error) {
-      console.error("Failed to update quantity:", error);
-    }
   };
 
   const handleShare = async () => {
@@ -558,30 +607,82 @@ totalCount,
       Alert.alert("Invalid quantity", "Quantity must be greater than 0.");
       return;
     }
-    setSavingEdit(true);
-    try {
-      if (isNewItem) {
-        await addItem({ name: trimmed, quantity, unit: editUnit ?? null, category: editCategory ?? suggestCategory(trimmed) });
-        await recordItemUsage({ name: trimmed, quantity, unit: editUnit ?? null, category: editCategory ?? suggestCategory(trimmed) });
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } else {
-        await updateItem(editingItem!.id, {
-          name: trimmed,
-          quantity,
-          unit: editUnit ?? null,
-          category: editCategory ?? suggestCategory(trimmed),
-          note: editNote.trim() ? editNote.trim() : null,
-        });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-      setEditingItem(null);
-      setIsNewItem(false);
-    } catch {
-      Alert.alert("Error", "Failed to save item");
-    } finally {
-      setSavingEdit(false);
+    const category = editCategory ?? suggestCategory(trimmed);
+    const note = editNote.trim() ? editNote.trim() : null;
+
+    setEditingItem(null);
+    setIsNewItem(false);
+    setAutoFocusItemName(false);
+    setInlineEditingItemId(null);
+
+    if (isNewItem) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void (async () => {
+        try {
+          await addItem({
+            name: trimmed,
+            quantity,
+            unit: editUnit,
+            category,
+          });
+          await recordItemUsage({
+            name: trimmed,
+            quantity,
+            unit: editUnit,
+            category,
+          });
+        } catch (error) {
+          console.error("Failed to add item:", error);
+          showErrorToast("Couldn't add item");
+        }
+      })();
+      return;
     }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    await updateItem(editingItem!.id, {
+      name: trimmed,
+      quantity,
+      unit: editUnit ?? null,
+      category,
+      note,
+    });
   };
+
+  const handleStartInlineEdit = useCallback(
+    (item: GroceryItem) => {
+      if (reorderMode) return;
+      setInlineEditingItemId(item.id);
+      setInlineNameDraft(item.name);
+    },
+    [reorderMode],
+  );
+
+  const handleSaveInlineEdit = useCallback(
+    async (item: GroceryItem) => {
+      if (inlineSaving || inlineEditingItemId !== item.id) return;
+
+      const trimmed = inlineNameDraft.trim();
+      if (!trimmed || trimmed === item.name) {
+        setInlineEditingItemId(null);
+        setInlineNameDraft("");
+        return;
+      }
+
+      setInlineSaving(true);
+      try {
+        await updateItem(item.id, { name: trimmed });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch {
+        Alert.alert("Rename failed", "Could not update the item name.");
+      } finally {
+        setInlineSaving(false);
+        setInlineEditingItemId(null);
+        setInlineNameDraft("");
+      }
+    },
+    [inlineEditingItemId, inlineNameDraft, inlineSaving, updateItem],
+  );
 
   const handleReorder = useCallback(
     (sectionTitle: string, itemId: string, offset: number) => {
@@ -595,7 +696,7 @@ totalCount,
         if (currentIndex === -1) return prev;
         const newIndex = Math.max(
           0,
-          Math.min(targetSection.data.length - 1, currentIndex + offset)
+          Math.min(targetSection.data.length - 1, currentIndex + offset),
         );
         if (currentIndex === newIndex) return prev;
         const [moved] = targetSection.data.splice(currentIndex, 1);
@@ -612,7 +713,7 @@ totalCount,
         return next;
       });
     },
-    [checkedItems, reorderItems]
+    [checkedItems, reorderItems],
   );
 
   const renderItem = ({ item, section }: { item: GroceryItem; section: ListSection }) => (
@@ -622,9 +723,14 @@ totalCount,
       reorderMode={reorderMode}
       userId={user?.uid}
       memberProfiles={memberProfiles}
+      inlineEditingItemId={inlineEditingItemId}
+      inlineNameDraft={inlineNameDraft}
+      inlineSaving={inlineSaving}
       onToggle={handleToggle}
-      onDelete={handleDelete}
       onEdit={setEditingItem}
+      onStartInlineEdit={handleStartInlineEdit}
+      onInlineNameChange={setInlineNameDraft}
+      onSaveInlineEdit={handleSaveInlineEdit}
       onReorder={handleReorder}
     />
   );
@@ -638,28 +744,32 @@ totalCount,
   }
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} className="flex-1 bg-white dark:bg-gray-900">
-      <View className="bg-white dark:bg-gray-900 px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 z-10">
-        <View className="flex-row items-center justify-between min-h-[44px]">
-          {/* Left: Back */}
-          <View className="flex-none w-[20%] items-start">
-            <TouchableOpacity
-              onPress={() => router.back()}
-              className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-100 dark:active:bg-gray-800 -ml-1"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="chevron-back" size={26} color={isDark ? "#f3f4f6" : "#1f2937"} />
-            </TouchableOpacity>
-          </View>
+    <View className="flex-1 bg-gray-50 dark:bg-gray-950">
+      <SafeAreaView edges={["top"]} className="bg-white dark:bg-gray-900">
+        <View className="bg-white dark:bg-gray-900 px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 z-10">
+          <View className="flex-row items-center justify-between min-h-[44px]">
+            {/* Left: Back */}
+            <View className="flex-none w-[20%] items-start">
+              <TouchableOpacity
+                onPress={() => router.back()}
+                className="w-10 h-10 items-center justify-center rounded-full active:bg-gray-100 dark:active:bg-gray-800 -ml-1"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="chevron-back" size={26} color={isDark ? "#f3f4f6" : "#1f2937"} />
+              </TouchableOpacity>
+            </View>
 
-          {/* Center: Title & Members */}
-          <View className="flex-1 items-center justify-center mx-2 max-w-[60%]">
+            {/* Center: Title & Members */}
+            <View className="flex-1 items-center justify-center mx-2 max-w-[60%]">
               <TouchableOpacity
                 onPress={() => setIsRenaming(true)}
                 className="items-center justify-center w-full py-1"
                 activeOpacity={0.6}
               >
-                <Text className="text-lg font-bold text-gray-900 dark:text-gray-50 text-center leading-tight" numberOfLines={1}>
+                <Text
+                  className="text-lg font-bold text-gray-900 dark:text-gray-50 text-center leading-tight"
+                  numberOfLines={1}
+                >
                   {list?.name || "List"}
                 </Text>
 
@@ -674,7 +784,9 @@ totalCount,
                             className={`w-4 h-4 rounded-full items-center justify-center border border-white dark:border-gray-900 -ml-1 ${
                               uid === list?.ownerUid ? "" : "bg-white dark:bg-gray-800"
                             } ${index === 0 ? "ml-0" : ""}`}
-                            style={uid === list?.ownerUid ? { backgroundColor: accent[100] } : undefined}
+                            style={
+                              uid === list?.ownerUid ? { backgroundColor: accent[100] } : undefined
+                            }
                           >
                             <Text
                               className={`text-[9px] font-bold ${
@@ -701,38 +813,39 @@ totalCount,
                   </View>
                 )}
               </TouchableOpacity>
-          </View>
+            </View>
 
-          {/* Right: Actions */}
-          <View className="flex-none w-[20%] flex-row items-center justify-end gap-0.5">
-                <IconButton
-                  icon={showCompleted ? "eye" : "eye-off"}
-                  onPress={() => setShowCompleted((prev) => !prev)}
-                  color={showCompleted ? (isDark ? "#9ca3af" : "#4b5563") : (isDark ? "#6b7280" : "#9ca3af")}
-                  size={20}
-                  className="p-1.5"
-                />
-                <IconButton
-                  icon="reorder-three"
-                  onPress={() => setReorderMode((prev) => !prev)}
-                  color={reorderMode ? accent[600] : (isDark ? "#9ca3af" : "#4b5563")}
-                  size={22}
-                  className="p-1.5"
-                />
-                <IconButton
-                  icon="share-outline"
-                  onPress={() => setShowShare(true)}
-                  color={isDark ? "#9ca3af" : "#4b5563"}
-                  size={20}
-                  className="p-1.5"
-                />
-          </View>
+            {/* Right: Actions */}
+            <View className="flex-none w-[20%] flex-row items-center justify-end gap-0.5">
+              <IconButton
+                icon={showCompleted ? "eye" : "eye-off"}
+                onPress={() => setShowCompleted((prev) => !prev)}
+                color={
+                  showCompleted ? (isDark ? "#9ca3af" : "#4b5563") : isDark ? "#6b7280" : "#9ca3af"
+                }
+                size={20}
+                className="p-1.5"
+              />
+              <IconButton
+                icon="reorder-three"
+                onPress={() => setReorderMode((prev) => !prev)}
+                color={reorderMode ? accent[600] : isDark ? "#9ca3af" : "#4b5563"}
+                size={22}
+                className="p-1.5"
+              />
+              <IconButton
+                icon="share-outline"
+                onPress={() => setShowShare(true)}
+                color={isDark ? "#9ca3af" : "#4b5563"}
+                size={20}
+                className="p-1.5"
+              />
+            </View>
           </View>
         </View>
+      </SafeAreaView>
 
-      <View
-        className="flex-1 bg-gray-50 dark:bg-gray-950"
-      >
+      <View className="flex-1 bg-gray-50 dark:bg-gray-950">
         {totalCount > 0 && (
           <View className="px-5 py-2.5">
             <Text className="text-[15px] text-gray-400 dark:text-gray-500">
@@ -746,12 +859,20 @@ totalCount,
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           renderSectionHeader={({ section }) => (
-            <View
-              className="px-5 py-2.5"
-            >
+            <View className="px-5 py-2.5 flex-row items-center justify-between">
               <Text className="text-[13px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
                 {section.title}
               </Text>
+              {!section.isCompleted && section.category ? (
+                <IconButton
+                  icon="add"
+                  size={18}
+                  color={accent[500]}
+                  onPress={() => openNewItemEditor("", section.category)}
+                  accessibilityLabel={`Add item to ${section.title}`}
+                  className="p-1"
+                />
+              ) : null}
             </View>
           )}
           contentContainerClassName="pb-6"
@@ -760,53 +881,16 @@ totalCount,
             <EmptyState
               icon="document-text-outline"
               title="Empty list"
-              subtitle="Add your first item below"
+              subtitle="Add your first item with the button"
             />
           }
+          contentContainerStyle={{ paddingBottom: 96 }}
         />
 
-        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
-          <View className="flex-row items-center gap-2">
-            <View className="flex-1 flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-xl px-4 h-12">
-              <TextInput
-                testID="add-item-input"
-                placeholder="Add an item..."
-                placeholderTextColor={isDark ? "#6b7280" : "#9ca3af"}
-                value={newItemName}
-                onChangeText={setNewItemName}
-                onSubmitEditing={handleAddItem}
-                returnKeyType="done"
-                blurOnSubmit={false}
-                onFocus={() => setInputFocused(true)}
-                onBlur={() => setTimeout(() => setInputFocused(false), 120)}
-                className="flex-1 text-base text-gray-900 dark:text-gray-100 h-12"
-              />
-              {newItemName.trim() ? (
-                <TouchableOpacity
-                  onPress={handleAddItemDetailed}
-                  className="p-1.5"
-                  hitSlop={8}
-                >
-                  <Ionicons name="create-outline" size={18} color={accent[500]} />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-            <TouchableOpacity
-              testID="add-item-submit"
-              onPress={handleAddItem}
-              disabled={adding || !newItemName.trim()}
-              className="w-11 h-11 rounded-xl items-center justify-center"
-              style={{ backgroundColor: !newItemName.trim() ? (isDark ? '#374151' : '#d1d5db') : accent[500] }}
-              activeOpacity={0.7}
-            >
-              {adding ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons name="arrow-up" size={20} color="#fff" />
-              )}
-            </TouchableOpacity>
-          </View>
-        </KeyboardStickyView>
+        <FAB
+          testID="add-item-fab"
+          onPress={() => openNewItemEditor("", undefined, { autoFocusName: true })}
+        />
 
         <BottomSheet
           visible={showShare}
@@ -890,16 +974,19 @@ totalCount,
             setEditingItem(null);
             setIsNewItem(false);
             setCategoryOpen(false);
+            setAutoFocusItemName(false);
           }}
           title={isNewItem ? "Add Item" : "Edit Item"}
         >
           <View className="flex-row gap-3 mb-3">
             <View className="flex-1">
               <AppTextInput
+                ref={editNameInputRef}
                 label="Name"
                 value={editName}
                 onChangeText={setEditName}
                 placeholder="Item name"
+                autoFocus={autoFocusItemName}
               />
             </View>
             <View className="w-20">
@@ -913,7 +1000,9 @@ totalCount,
           </View>
 
           <View className="mb-3">
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Unit</Text>
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Unit
+            </Text>
             <View className="flex-row flex-wrap gap-2">
               {UNITS.map((unit) => {
                 const active = editUnit === unit.value;
@@ -922,9 +1011,7 @@ totalCount,
                     key={unit.value}
                     onPress={() => setEditUnit(active ? undefined : unit.value)}
                     className={`px-3 py-1.5 rounded-full border ${
-                      active
-                        ? ""
-                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                      active ? "" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                     }`}
                     style={
                       active
@@ -946,8 +1033,10 @@ totalCount,
           </View>
 
           <View className="mb-3">
-            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Category</Text>
-            
+            <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              Category
+            </Text>
+
             <TouchableOpacity
               onPress={() => setCategoryOpen(!categoryOpen)}
               activeOpacity={0.7}
@@ -995,7 +1084,7 @@ totalCount,
                 {allCategories.map((category, index) => {
                   const isSelected = editCategory === category.value;
                   const isLast = index === allCategories.length - 1;
-                  
+
                   return (
                     <TouchableOpacity
                       key={category.value}
@@ -1012,14 +1101,12 @@ totalCount,
                         <Ionicons
                           name={category.icon as keyof typeof Ionicons.glyphMap}
                           size={16}
-                          color={isSelected ? "#fff" : (isDark ? "#9ca3af" : "#6b7280")}
+                          color={isSelected ? "#fff" : isDark ? "#9ca3af" : "#6b7280"}
                         />
                       </View>
                       <Text
                         className={`text-sm ${
-                          isSelected
-                            ? "font-medium text-white"
-                            : "text-gray-700 dark:text-gray-300"
+                          isSelected ? "font-medium text-white" : "text-gray-700 dark:text-gray-300"
                         }`}
                       >
                         {category.label}
@@ -1041,21 +1128,16 @@ totalCount,
               className="mb-3"
             />
           ) : (
-            <TouchableOpacity
-              onPress={() => setShowNoteField(true)}
-              className="mb-3"
-            >
-              <Text className="text-sm" style={{ color: accent[500] }}>+ Add note</Text>
+            <TouchableOpacity onPress={() => setShowNoteField(true)} className="mb-3">
+              <Text className="text-sm" style={{ color: accent[500] }}>
+                + Add note
+              </Text>
             </TouchableOpacity>
           )}
 
           <View className="flex-row items-center gap-3">
             <View className="flex-1">
-              <AppButton
-                title="Save changes"
-                onPress={handleSaveEdit}
-                loading={savingEdit}
-              />
+              <AppButton title="Save changes" onPress={handleSaveEdit} />
             </View>
             {!!editingItem && (
               <TouchableOpacity
@@ -1081,7 +1163,7 @@ totalCount,
             className="flex-1 items-center justify-center bg-black/50 px-4"
           >
             <TouchableOpacity
-              style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
+              style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }}
               activeOpacity={1}
               onPress={() => {
                 setIsRenaming(false);
@@ -1128,6 +1210,6 @@ totalCount,
           </RNKeyboardAvoidingView>
         </Modal>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

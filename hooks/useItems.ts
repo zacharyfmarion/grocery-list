@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   query,
@@ -15,6 +15,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { GroceryItem, GroceryCategory } from "@/types";
 import { suggestCategory } from "@/lib/constants";
+import { showErrorToast, showUndoToast } from "@/lib/toast";
 
 interface AddItemParams {
   name: string;
@@ -33,14 +34,52 @@ interface UpdateItemParams {
   order?: number;
 }
 
+interface PendingItemUpdate {
+  mutationId: string;
+  item: GroceryItem;
+}
+
+interface PendingDelete {
+  mutationId: string;
+  item: GroceryItem;
+  status: "scheduled" | "committing";
+}
+
+const DELETE_UNDO_MS = 4000;
+
+function createMutationId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeValue(value?: string | null) {
+  return value ?? "";
+}
+
+function areItemsEquivalent(serverItem: GroceryItem, optimisticItem: GroceryItem) {
+  return (
+    serverItem.name === optimisticItem.name &&
+    serverItem.quantity === optimisticItem.quantity &&
+    normalizeValue(serverItem.unit) === normalizeValue(optimisticItem.unit) &&
+    normalizeValue(serverItem.note) === normalizeValue(optimisticItem.note) &&
+    normalizeValue(serverItem.category) === normalizeValue(optimisticItem.category) &&
+    serverItem.checked === optimisticItem.checked &&
+    (serverItem.order ?? null) === (optimisticItem.order ?? null)
+  );
+}
+
 export function useItems(listId: string) {
   const { user } = useAuth();
-  const [items, setItems] = useState<GroceryItem[]>([]);
+  const [serverItems, setServerItems] = useState<GroceryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingUpdates, setPendingUpdates] = useState<Record<string, PendingItemUpdate>>({});
+  const [pendingDeletes, setPendingDeletes] = useState<Record<string, PendingDelete>>({});
+  const deleteTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     if (!listId || !user) {
-      setItems([]);
+      setServerItems([]);
+      setPendingUpdates({});
+      setPendingDeletes({});
       setLoading(false);
       return;
     }
@@ -55,24 +94,80 @@ export function useItems(listId: string) {
           id: docSnap.id,
           ...docSnap.data(),
         })) as GroceryItem[];
-        setItems(results);
+        setServerItems(results);
         setLoading(false);
       },
       (error) => {
         console.error("Error listening to items:", error);
         setLoading(false);
-      }
+      },
     );
 
     return unsubscribe;
   }, [listId, user]);
 
+  useEffect(() => {
+    return () => {
+      Object.values(deleteTimeoutsRef.current).forEach((timeout) => clearTimeout(timeout));
+      deleteTimeoutsRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    setPendingUpdates((prev) => {
+      let changed = false;
+      const next: Record<string, PendingItemUpdate> = {};
+
+      Object.entries(prev).forEach(([itemId, pending]) => {
+        const serverItem = serverItems.find((item) => item.id === itemId);
+        if (!serverItem) {
+          changed = true;
+          return;
+        }
+        if (areItemsEquivalent(serverItem, pending.item)) {
+          changed = true;
+          return;
+        }
+        next[itemId] = pending;
+      });
+
+      return changed ? next : prev;
+    });
+
+    setPendingDeletes((prev) => {
+      let changed = false;
+      const next: Record<string, PendingDelete> = {};
+
+      Object.entries(prev).forEach(([itemId, pending]) => {
+        const stillExistsOnServer = serverItems.some((item) => item.id === itemId);
+        if (!stillExistsOnServer) {
+          changed = true;
+          return;
+        }
+        next[itemId] = pending;
+      });
+
+      return changed ? next : prev;
+    });
+  }, [serverItems]);
+
+  const renderedItems = useMemo(() => {
+    return serverItems
+      .filter((item) => !pendingDeletes[item.id])
+      .map((item) => pendingUpdates[item.id]?.item ?? item);
+  }, [pendingDeletes, pendingUpdates, serverItems]);
+
   // Sort: unchecked first (by category then order/name), then checked
   const sortedItems = useMemo(() => {
-    const unchecked = items.filter((i) => !i.checked);
-    const checked = items.filter((i) => i.checked);
+    const unchecked = renderedItems.filter((i) => !i.checked);
+    const checked = renderedItems.filter((i) => i.checked);
     return [...unchecked, ...checked];
-  }, [items]);
+  }, [renderedItems]);
+
+  const getRenderedItem = useCallback(
+    (itemId: string) => renderedItems.find((item) => item.id === itemId),
+    [renderedItems],
+  );
 
   const addItem = async (params: string | AddItemParams) => {
     if (!user || !listId) throw new Error("Not authenticated");
@@ -98,18 +193,75 @@ export function useItems(listId: string) {
     });
   };
 
+  const commitOptimisticUpdate = useCallback(
+    (
+      itemId: string,
+      buildNextItem: (currentItem: GroceryItem) => GroceryItem,
+      commit: () => Promise<void>,
+      errorMessage: string,
+    ) => {
+      const currentItem = getRenderedItem(itemId);
+      if (!currentItem) return;
+
+      const mutationId = createMutationId();
+      const nextItem = buildNextItem(currentItem);
+
+      setPendingUpdates((prev) => ({
+        ...prev,
+        [itemId]: {
+          mutationId,
+          item: nextItem,
+        },
+      }));
+
+      void (async () => {
+        try {
+          await commit();
+        } catch (error) {
+          console.error("Optimistic item update failed:", error);
+          setPendingUpdates((prev) => {
+            if (prev[itemId]?.mutationId !== mutationId) return prev;
+            const next = { ...prev };
+            delete next[itemId];
+            return next;
+          });
+          showErrorToast(errorMessage);
+        }
+      })();
+    },
+    [getRenderedItem],
+  );
+
   const toggleItem = async (itemId: string, currentChecked: boolean) => {
-    await updateDoc(doc(db, "lists", listId, "items", itemId), {
-      checked: !currentChecked,
-      updatedAt: serverTimestamp(),
-    });
+    await commitOptimisticUpdate(
+      itemId,
+      (currentItem) => ({
+        ...currentItem,
+        checked: !currentChecked,
+      }),
+      () =>
+        updateDoc(doc(db, "lists", listId, "items", itemId), {
+          checked: !currentChecked,
+          updatedAt: serverTimestamp(),
+        }),
+      "Couldn't update item",
+    );
   };
 
   const updateQuantity = async (itemId: string, quantity: number) => {
-    await updateDoc(doc(db, "lists", listId, "items", itemId), {
-      quantity,
-      updatedAt: serverTimestamp(),
-    });
+    await commitOptimisticUpdate(
+      itemId,
+      (currentItem) => ({
+        ...currentItem,
+        quantity,
+      }),
+      () =>
+        updateDoc(doc(db, "lists", listId, "items", itemId), {
+          quantity,
+          updatedAt: serverTimestamp(),
+        }),
+      "Couldn't update item",
+    );
   };
 
   const updateItem = async (itemId: string, updates: UpdateItemParams) => {
@@ -124,11 +276,89 @@ export function useItems(listId: string) {
     if (updates.note !== undefined) data.note = updates.note === null ? "" : updates.note;
     if (updates.order !== undefined) data.order = updates.order;
 
-    await updateDoc(doc(db, "lists", listId, "items", itemId), data);
+    await commitOptimisticUpdate(
+      itemId,
+      (currentItem) => ({
+        ...currentItem,
+        ...(updates.name !== undefined ? { name: updates.name } : {}),
+        ...(updates.quantity !== undefined ? { quantity: updates.quantity } : {}),
+        ...(updates.unit !== undefined ? { unit: updates.unit ?? undefined } : {}),
+        ...(updates.category !== undefined ? { category: updates.category } : {}),
+        ...(updates.note !== undefined ? { note: updates.note ?? undefined } : {}),
+        ...(updates.order !== undefined ? { order: updates.order } : {}),
+      }),
+      () => updateDoc(doc(db, "lists", listId, "items", itemId), data),
+      updates.name !== undefined && Object.keys(updates).length === 1
+        ? "Couldn't rename item"
+        : "Couldn't save item",
+    );
   };
 
   const deleteItem = async (itemId: string) => {
-    await deleteDoc(doc(db, "lists", listId, "items", itemId));
+    const currentItem = getRenderedItem(itemId);
+    if (!currentItem) return;
+
+    const mutationId = createMutationId();
+
+    const undoDelete = () => {
+      const timeout = deleteTimeoutsRef.current[itemId];
+      if (timeout) {
+        clearTimeout(timeout);
+        delete deleteTimeoutsRef.current[itemId];
+      }
+
+      setPendingDeletes((prev) => {
+        if (prev[itemId]?.mutationId !== mutationId) return prev;
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+    };
+
+    setPendingDeletes((prev) => ({
+      ...prev,
+      [itemId]: {
+        mutationId,
+        item: currentItem,
+        status: "scheduled",
+      },
+    }));
+
+    showUndoToast({
+      message: `Removed ${currentItem.name}`,
+      onUndo: undoDelete,
+      durationMs: DELETE_UNDO_MS,
+    });
+
+    deleteTimeoutsRef.current[itemId] = setTimeout(async () => {
+      setPendingDeletes((prev) => {
+        const pendingDelete = prev[itemId];
+        if (!pendingDelete || pendingDelete.mutationId !== mutationId) return prev;
+
+        return {
+          ...prev,
+          [itemId]: {
+            ...pendingDelete,
+            status: "committing",
+          },
+        };
+      });
+
+      try {
+        await deleteDoc(doc(db, "lists", listId, "items", itemId));
+      } catch (error) {
+        console.error("Optimistic delete failed:", error);
+        setPendingDeletes((prev) => {
+          if (prev[itemId]?.mutationId !== mutationId) return prev;
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+        showErrorToast("Couldn't delete item");
+      } finally {
+        delete deleteTimeoutsRef.current[itemId];
+      }
+    }, DELETE_UNDO_MS);
   };
 
   const reorderItems = async (reorderedItems: GroceryItem[]) => {
