@@ -60,6 +60,7 @@ export interface UserPreferences {
   listOrder?: string[];
   hiddenCategories?: GroceryCategory[];
   categoryOrder?: GroceryCategory[];
+  listCategoryOrderOverrides?: Record<string, GroceryCategory[]>;
 }
 
 export interface ItemHistoryEntry {

@@ -26,7 +26,7 @@ export const CATEGORIES: { value: GroceryCategory; label: string; icon: string }
   { value: "meat", label: "Meat", icon: "restaurant-outline" },
   { value: "seafood", label: "Seafood", icon: "fish-outline" },
   { value: "deli", label: "Deli", icon: "pizza-outline" },
-  { value: "bakery", label: "Bakery", icon: "bread-slice" },
+  { value: "bakery", label: "Bakery", icon: "bag-handle-outline" },
   { value: "frozen", label: "Frozen", icon: "snow-outline" },
   { value: "canned", label: "Canned Goods", icon: "cube-outline" },
   { value: "pasta", label: "Pasta & Grains", icon: "grid-outline" },
@@ -408,6 +408,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   listOrder: [],
   hiddenCategories: [],
   categoryOrder: [],
+  listCategoryOrderOverrides: {},
 };
 
 // Need this import for the type

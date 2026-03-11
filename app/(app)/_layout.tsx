@@ -22,6 +22,7 @@ export default function AppLayout() {
   return (
     <Stack
       screenOptions={{
+        contentStyle: { backgroundColor: isDark ? "#030712" : "#f9fafb" },
         headerShadowVisible: false,
         headerStyle: { backgroundColor: isDark ? "#111827" : "#ffffff" },
         headerTintColor: isDark ? "#f9fafb" : "#111827",
@@ -32,6 +33,12 @@ export default function AppLayout() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="list/[id]" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="list-settings/[id]"
+        options={{
+          title: "List Settings",
+        }}
+      />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
     </Stack>
   );

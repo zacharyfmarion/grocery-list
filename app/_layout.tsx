@@ -16,6 +16,7 @@ import {
   DarkTheme,
   DefaultTheme,
 } from "@react-navigation/native";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -48,19 +49,23 @@ function RootContent() {
 
   return (
     <NavThemeProvider value={navTheme}>
-      <GestureHandlerRootView style={{ flex: 1, backgroundColor: isDark ? "#111827" : "#ffffff" }}>
-        <ThemedStatusBar />
-        <KeyboardProvider>
-          <AuthProvider>
-            <OfflineBanner />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(app)" />
-            </Stack>
-            <AppToaster />
-          </AuthProvider>
-        </KeyboardProvider>
-      </GestureHandlerRootView>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <GestureHandlerRootView
+          style={{ flex: 1, backgroundColor: isDark ? "#111827" : "#ffffff" }}
+        >
+          <ThemedStatusBar />
+          <KeyboardProvider>
+            <AuthProvider>
+              <OfflineBanner />
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(app)" />
+              </Stack>
+              <AppToaster />
+            </AuthProvider>
+          </KeyboardProvider>
+        </GestureHandlerRootView>
+      </SafeAreaProvider>
     </NavThemeProvider>
   );
 }

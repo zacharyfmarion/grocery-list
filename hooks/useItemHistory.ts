@@ -80,12 +80,12 @@ export function useItemHistory() {
 
   const getSuggestions = useCallback(
     (searchText: string): ItemHistoryEntry[] => {
-      if (!searchText.trim()) return history.slice(0, 8);
+      if (!searchText.trim()) return history.slice(0, 10);
 
       const lower = searchText.toLowerCase();
       return history
         .filter((item) => item.name.toLowerCase().includes(lower))
-        .slice(0, 6);
+        .slice(0, 10);
     },
     [history]
   );
