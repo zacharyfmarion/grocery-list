@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { UserPreferences } from "@/types";
@@ -17,23 +17,23 @@ export function usePreferences() {
       return;
     }
 
-    const fetchPreferences = async () => {
-      try {
-        const prefDoc = await getDoc(doc(db, "userPreferences", user.uid));
-        if (prefDoc.exists()) {
-          setPreferences({ ...DEFAULT_PREFERENCES, ...prefDoc.data() } as UserPreferences);
+    const unsubscribe = onSnapshot(
+      doc(db, "userPreferences", user.uid),
+      async (snap) => {
+        if (snap.exists()) {
+          setPreferences({ ...DEFAULT_PREFERENCES, ...snap.data() } as UserPreferences);
         } else {
-          // Create default preferences
           await setDoc(doc(db, "userPreferences", user.uid), DEFAULT_PREFERENCES);
         }
-      } catch (error) {
-        console.error("Error fetching preferences:", error);
-      } finally {
         setLoading(false);
-      }
-    };
+      },
+      (error) => {
+        console.error("Error listening to preferences:", error);
+        setLoading(false);
+      },
+    );
 
-    fetchPreferences();
+    return unsubscribe;
   }, [user]);
 
   const updatePreferences = useCallback(

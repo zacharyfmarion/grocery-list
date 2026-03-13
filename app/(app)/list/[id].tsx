@@ -1584,109 +1584,121 @@ export default function ListDetailScreen() {
 
                 <ScrollView
                   className="flex-1"
-                  contentContainerStyle={{ padding: 24, paddingBottom: 32 }}
+                  contentContainerStyle={{
+                    paddingHorizontal: 24,
+                    paddingTop: showAddDetails ? 24 : 0,
+                    paddingBottom: 32,
+                  }}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                 >
                   {!showAddDetails ? (
-                    <View className="gap-3 min-h-full">
+                    <View className="min-h-full">
                       {draftName.trim() ? (
-                        <View className="rounded-2xl border px-4 py-4 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                          <View className="flex-row items-center justify-between gap-3">
-                            <TouchableOpacity
-                              onPress={handleProceedToAddDetails}
-                              activeOpacity={0.8}
-                              className="flex-1"
-                            >
-                              <Text className="text-sm font-semibold text-gray-900 dark:text-gray-50">
-                                {draftName.trim()}
-                              </Text>
-                              <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Press return or tap to continue with details
-                              </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              onPress={handleCreateTypedItem}
-                              className="px-3 py-1.5 rounded-full"
-                              style={{ backgroundColor: accent[50] }}
-                            >
-                              <Text className="text-xs font-semibold" style={{ color: accent[700] }}>
-                                Create
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      ) : null}
-
-                      {addSuggestions.map((suggestion) => {
-                        const categoryLabel = allCategories.find(
-                          (category) => category.value === suggestion.category,
-                        )?.label;
-                        const meta =
-                          suggestion.type === "completed_match"
-                            ? formatSuggestionMeta(suggestion.quantity, suggestion.unit, categoryLabel, {
-                                prefix: "Completed earlier",
-                              })
-                            : suggestion.type === "active_match"
-                              ? formatSuggestionMeta(
-                                  suggestion.quantity,
-                                  suggestion.unit,
-                                  categoryLabel,
-                                  { prefix: "Already on this list" },
-                                )
-                              : formatSuggestionMeta(
-                                  suggestion.quantity,
-                                  suggestion.unit,
-                                  categoryLabel,
-                                );
-
-                        return (
-                          <View
-                            key={suggestion.key}
-                            className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3"
-                          >
+                        <View className="mx-[-24px]">
+                          <View className="px-6 py-4">
                             <View className="flex-row items-center justify-between gap-3">
-                              <View className="flex-1">
+                              <TouchableOpacity
+                                onPress={handleProceedToAddDetails}
+                                activeOpacity={0.8}
+                                className="flex-1"
+                              >
                                 <Text className="text-sm font-semibold text-gray-900 dark:text-gray-50">
-                                  {suggestion.name}
+                                  {draftName.trim()}
                                 </Text>
-                                {meta ? (
-                                  <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    {meta}
-                                  </Text>
-                                ) : null}
-                              </View>
+                                <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                  Press return or tap to continue with details
+                                </Text>
+                              </TouchableOpacity>
 
                               <TouchableOpacity
-                                onPress={() => {
-                                  void handleUseSuggestion(suggestion);
-                                }}
-                                className="px-3 py-1.5 rounded-full"
-                                style={{
-                                  backgroundColor:
-                                    suggestion.type === "completed_match" ? accent[500] : accent[50],
-                                }}
+                                onPress={handleCreateTypedItem}
+                                className="px-4 py-2.5 rounded-full min-w-[88px] items-center"
+                                style={{ backgroundColor: accent[50] }}
                               >
-                                <Text
-                                  className={`text-xs font-semibold ${
-                                    suggestion.type === "completed_match" ? "text-white" : ""
-                                  }`}
-                                  style={
-                                    suggestion.type === "completed_match"
-                                      ? undefined
-                                      : { color: accent[700] }
-                                  }
-                                >
-                                  {suggestion.type === "active_match"
-                                    ? "Edit"
-                                    : "Reuse"}
+                                <Text className="text-sm font-semibold" style={{ color: accent[700] }}>
+                                  Create
                                 </Text>
                               </TouchableOpacity>
                             </View>
                           </View>
-                        );
-                      })}
+                        </View>
+                      ) : null}
+
+                      {addSuggestions.length ? (
+                        <View className="mx-[-24px]">
+                          {addSuggestions.map((suggestion, index) => {
+                            const categoryLabel = allCategories.find(
+                              (category) => category.value === suggestion.category,
+                            )?.label;
+                            const meta =
+                              suggestion.type === "completed_match"
+                                ? formatSuggestionMeta(suggestion.quantity, suggestion.unit, categoryLabel, {
+                                    prefix: "Completed earlier",
+                                  })
+                                : suggestion.type === "active_match"
+                                  ? formatSuggestionMeta(
+                                      suggestion.quantity,
+                                      suggestion.unit,
+                                      categoryLabel,
+                                      { prefix: "Already on this list" },
+                                    )
+                                  : formatSuggestionMeta(
+                                      suggestion.quantity,
+                                      suggestion.unit,
+                                      categoryLabel,
+                                    );
+
+                            return (
+                              <View
+                                key={suggestion.key}
+                                className={index > 0 ? "border-t border-gray-200 dark:border-gray-700" : ""}
+                              >
+                                <View className="px-6 py-4">
+                                  <View className="flex-row items-center justify-between gap-3">
+                                    <View className="flex-1">
+                                      <Text className="text-sm font-semibold text-gray-900 dark:text-gray-50">
+                                        {suggestion.name}
+                                      </Text>
+                                      {meta ? (
+                                        <Text className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                          {meta}
+                                        </Text>
+                                      ) : null}
+                                    </View>
+
+                                    <TouchableOpacity
+                                      onPress={() => {
+                                        void handleUseSuggestion(suggestion);
+                                      }}
+                                      className="px-4 py-2.5 rounded-full min-w-[88px] items-center"
+                                      style={{
+                                        backgroundColor:
+                                          suggestion.type === "completed_match" ? accent[500] : accent[50],
+                                      }}
+                                    >
+                                      <Text
+                                        className={`text-sm font-semibold ${
+                                          suggestion.type === "completed_match" ? "text-white" : ""
+                                        }`}
+                                        style={
+                                          suggestion.type === "completed_match"
+                                            ? undefined
+                                            : { color: accent[700] }
+                                        }
+                                      >
+                                        {suggestion.type === "active_match"
+                                          ? "Edit"
+                                          : "Reuse"}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ) : null}
                     </View>
                   ) : (
                     <>

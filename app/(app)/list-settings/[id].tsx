@@ -63,11 +63,10 @@ export default function ListSettingsScreen() {
       item,
       drag,
       isActive,
-      getIndex,
     }: RenderItemParams<(typeof orderedCategories)[number]>) => {
-      const index = getIndex() ?? 0;
-      const isFirst = index === 0;
-      const isLast = index === orderedCategories.length - 1;
+      const index = orderedCategories.findIndex((c) => c.value === item.value);
+      const isFirst = !isActive && index === 0;
+      const isLast = !isActive && index === orderedCategories.length - 1;
 
       return (
         <ScaleDecorator activeScale={1.03}>
@@ -110,7 +109,7 @@ export default function ListSettingsScreen() {
         </ScaleDecorator>
       );
     },
-    [accent, accentSurface, loading, mutedColor, orderedCategories.length],
+    [accent, accentSurface, loading, mutedColor, orderedCategories],
   );
 
   return (
